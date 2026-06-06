@@ -16,6 +16,7 @@ import {
   LineChartOutlined,
   CalendarOutlined,
 } from '@ant-design/icons';
+import NotificationCenter from './NotificationCenter';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -176,6 +177,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ user, onLogout }) => {
             </Title>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <NotificationCenter />
             {user && (
               <Dropdown menu={userDropdownItems} placement="bottomRight" trigger={['click']}>
                 <Space style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 8, transition: 'background 0.2s' }}>

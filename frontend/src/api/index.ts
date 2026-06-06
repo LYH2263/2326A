@@ -127,4 +127,16 @@ export const checkupScheduleApi = {
   getDailyStats: (date: string) => api.get('/checkup-schedules/daily-stats', { params: { date } }),
 };
 
+// ========== 预警通知 API ==========
+export const alertApi = {
+  getList: (params?: any) => api.get('/alerts', { params }),
+  getDetail: (id: number) => api.get(`/alerts/${id}`),
+  getStats: () => api.get('/alerts/stats'),
+  getUnreadCount: () => api.get('/alerts/unread-count'),
+  markAsRead: (id: number) => api.patch(`/alerts/${id}/read`),
+  markAllAsRead: () => api.patch('/alerts/read-all'),
+  markAsResolved: (id: number) => api.patch(`/alerts/${id}/resolve`),
+  scanAlerts: () => api.post('/alerts/scan'),
+};
+
 export default api;

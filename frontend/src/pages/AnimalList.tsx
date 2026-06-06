@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Space, Tag, Input, Select, Modal, Form,
   InputNumber, DatePicker, message, Popconfirm, Descriptions, Typography, Tooltip,
@@ -76,6 +77,10 @@ const AnimalList: React.FC = () => {
   const [changeReason, setChangeReason] = useState('');
   const [statusChanged, setStatusChanged] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const hasOpenedDetailRef = useRef(false);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -113,6 +118,26 @@ const AnimalList: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchSpecies(); fetchCageList(); fetchStatusFlowRules(); }, []);
+
+  useEffect(() => {
+    const animalId = searchParams.get('animalId');
+    if (animalId && !hasOpenedDetailRef.current) {
+      hasOpenedDetailRef.current = true;
+      const id = parseInt(animalId, 10);
+      if (!isNaN(id)) {
+        handleDetail(id);
+      }
+    }
+  }, [searchParams]);
+
+  const handleDetailClose = () => {
+    setDetailVisible(false);
+    if (searchParams.has('animalId')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('animalId');
+      setSearchParams(newParams);
+    }
+  };
 
   const handleAdd = () => {
     setEditingAnimal(null);
@@ -823,7 +848,7 @@ const AnimalList: React.FC = () => {
       <Modal
         title="动物详细信息"
         open={detailVisible}
-        onCancel={() => setDetailVisible(false)}
+        onCancel={handleDetailClose}
         footer={null}
         width={750}
         destroyOnClose

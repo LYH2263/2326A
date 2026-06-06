@@ -8,6 +8,7 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { FeedingModule } from './feeding/feeding.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { CheckupSchedulesModule } from './checkup-schedules/checkup-schedules.module';
+import { AlertsModule } from './alerts/alerts.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { CheckupSchedulesModule } from './checkup-schedules/checkup-schedules.mo
     FeedingModule,
     StatisticsModule,
     CheckupSchedulesModule,
+    AlertsModule,
   ],
 })
 export class AppModule {}

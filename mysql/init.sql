@@ -323,3 +323,25 @@ INSERT INTO `feeding_records` (`animal_id`, `feed_date`, `feed_time`, `food_type
 (1, '2026-01-21', '08:00:00', '标准啮齿类动物饲料', 5.00, 'g', 8.00, '小李', '正常进食'),
 (2, '2026-01-21', '08:00:00', '标准啮齿类动物饲料', 4.80, 'g', 7.20, '小李', '正常进食'),
 (6, '2026-01-21', '08:00:00', '标准大鼠饲料', 24.00, 'g', 33.00, '小张', '正常进食');
+
+-- ========================================
+-- 预警通知表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `alerts` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `type` ENUM('health_abnormal', 'next_check_overdue', 'no_feeding_record') NOT NULL COMMENT '预警类型',
+  `level` ENUM('warning', 'danger', 'info') NOT NULL DEFAULT 'warning' COMMENT '预警级别',
+  `title` VARCHAR(200) NOT NULL COMMENT '预警标题',
+  `message` TEXT COMMENT '预警详情',
+  `status` ENUM('unread', 'read', 'resolved') NOT NULL DEFAULT 'unread' COMMENT '状态',
+  `related_record_id` INT DEFAULT NULL COMMENT '关联记录ID',
+  `related_record_type` VARCHAR(50) DEFAULT NULL COMMENT '关联记录类型',
+  `triggered_at` DATETIME DEFAULT NULL COMMENT '触发时间',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_type` (`type`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预警通知表';
