@@ -60,4 +60,38 @@ export class HealthController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.healthService.remove(id);
   }
+
+  @Get('trend/:animalId')
+  @ApiOperation({ summary: '单动物健康指标趋势' })
+  @ApiQuery({ name: 'limit', required: false, description: '最近N次记录，默认10，最大50' })
+  getAnimalTrend(
+    @Param('animalId', ParseIntPipe) animalId: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.healthService.getAnimalTrend(animalId, limit);
+  }
+
+  @Get('comparison/multi')
+  @ApiOperation({ summary: '多动物健康指标横向对比' })
+  @ApiQuery({ name: 'animalIds', required: true, description: '动物ID列表，逗号分隔，最多5只' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  getMultiAnimalComparison(
+    @Query('animalIds') animalIds: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const ids = animalIds
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n));
+    return this.healthService.getMultiAnimalComparison(ids, startDate, endDate);
+  }
+
+  @Get('normal-ranges')
+  @ApiOperation({ summary: '获取物种正常指标范围' })
+  @ApiQuery({ name: 'species', required: false })
+  getNormalRanges(@Query('species') species?: string) {
+    return this.healthService.getNormalRanges(species);
+  }
 }

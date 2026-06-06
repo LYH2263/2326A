@@ -68,6 +68,48 @@ CREATE TABLE IF NOT EXISTS `health_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='健康记录表';
 
 -- ========================================
+-- 物种指标正常范围表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `species_normal_ranges` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `species` VARCHAR(50) NOT NULL COMMENT '物种',
+  `indicator_name` VARCHAR(50) NOT NULL COMMENT '指标名称',
+  `min_value` DECIMAL(10, 2) NOT NULL COMMENT '最小值',
+  `max_value` DECIMAL(10, 2) NOT NULL COMMENT '最大值',
+  `unit` VARCHAR(20) DEFAULT NULL COMMENT '单位',
+  `description` TEXT COMMENT '描述',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_species` (`species`),
+  UNIQUE KEY `uk_species_indicator` (`species`, `indicator_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='物种指标正常范围表';
+
+-- ========================================
+-- 种子数据：物种正常范围
+-- ========================================
+INSERT INTO `species_normal_ranges` (`species`, `indicator_name`, `min_value`, `max_value`, `unit`, `description`) VALUES
+-- 小鼠
+('小鼠', 'temperature', 36.5, 38.0, '℃', '小鼠正常体温范围'),
+('小鼠', 'weight', 18.0, 40.0, 'g', '成年小鼠正常体重范围'),
+('小鼠', 'heartRate', 500, 700, '次/分', '小鼠正常心率范围'),
+('小鼠', 'respiratoryRate', 120, 200, '次/分', '小鼠正常呼吸频率范围'),
+-- 大鼠
+('大鼠', 'temperature', 37.0, 38.5, '℃', '大鼠正常体温范围'),
+('大鼠', 'weight', 200.0, 500.0, 'g', '成年大鼠正常体重范围'),
+('大鼠', 'heartRate', 300, 450, '次/分', '大鼠正常心率范围'),
+('大鼠', 'respiratoryRate', 70, 120, '次/分', '大鼠正常呼吸频率范围'),
+-- 兔
+('兔', 'temperature', 38.5, 39.5, '℃', '家兔正常体温范围'),
+('兔', 'weight', 2000.0, 5000.0, 'g', '成年家兔正常体重范围'),
+('兔', 'heartRate', 180, 280, '次/分', '家兔正常心率范围'),
+('兔', 'respiratoryRate', 40, 70, '次/分', '家兔正常呼吸频率范围'),
+-- 豚鼠
+('豚鼠', 'temperature', 37.8, 39.2, '℃', '豚鼠正常体温范围'),
+('豚鼠', 'weight', 300.0, 800.0, 'g', '成年豚鼠正常体重范围'),
+('豚鼠', 'heartRate', 240, 320, '次/分', '豚鼠正常心率范围'),
+('豚鼠', 'respiratoryRate', 60, 110, '次/分', '豚鼠正常呼吸频率范围');
+
+-- ========================================
 -- 实验项目表
 -- ========================================
 CREATE TABLE IF NOT EXISTS `experiments` (

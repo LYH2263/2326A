@@ -13,6 +13,7 @@ import {
   MenuOutlined,
   UserOutlined,
   LogoutOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -22,6 +23,7 @@ const menuItems = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '系统首页' },
   { key: '/animals', icon: <BugOutlined />, label: '动物管理' },
   { key: '/health', icon: <HeartOutlined />, label: '健康记录' },
+  { key: '/health-comparison', icon: <LineChartOutlined />, label: '健康对比' },
   { key: '/experiments', icon: <ExperimentOutlined />, label: '实验项目' },
   { key: '/feeding', icon: <CoffeeOutlined />, label: '饲养记录' },
   { key: '/statistics', icon: <BarChartOutlined />, label: '数据统计' },

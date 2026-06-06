@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AnimalList from './pages/AnimalList';
 import HealthRecords from './pages/HealthRecords';
+import HealthComparison from './pages/HealthComparison';
 import Experiments from './pages/Experiments';
 import FeedingRecords from './pages/FeedingRecords';
 import Statistics from './pages/Statistics';
@@ -74,6 +75,7 @@ const App: React.FC = () => {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="animals" element={<AnimalList />} />
             <Route path="health" element={<HealthRecords />} />
+            <Route path="health-comparison" element={<HealthComparison />} />
             <Route path="experiments" element={<Experiments />} />
             <Route path="feeding" element={<FeedingRecords />} />
             <Route path="statistics" element={<Statistics />} />

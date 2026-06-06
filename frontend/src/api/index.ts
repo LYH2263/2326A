@@ -70,6 +70,14 @@ export const healthApi = {
   create: (data: any) => api.post('/health-records', data),
   update: (id: number, data: any) => api.patch(`/health-records/${id}`, data),
   delete: (id: number) => api.delete(`/health-records/${id}`),
+  getTrend: (animalId: number, limit?: number) =>
+    api.get(`/health-records/trend/${animalId}`, { params: { limit } }),
+  getMultiComparison: (animalIds: number[], startDate?: string, endDate?: string) =>
+    api.get('/health-records/comparison/multi', {
+      params: { animalIds: animalIds.join(','), startDate, endDate },
+    }),
+  getNormalRanges: (species?: string) =>
+    api.get('/health-records/normal-ranges', { params: { species } }),
 };
 
 // ========== 实验项目 API ==========
