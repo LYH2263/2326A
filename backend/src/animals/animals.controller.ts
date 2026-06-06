@@ -76,11 +76,13 @@ export class AnimalsController {
 
   @Patch(':id')
   @ApiOperation({ summary: '更新动物信息' })
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateAnimalDto: UpdateAnimalDto,
+    @Headers('authorization') auth?: string,
   ) {
-    return this.animalsService.update(id, updateAnimalDto);
+    const operator = await this.getOperatorFromToken(auth);
+    return this.animalsService.update(id, updateAnimalDto, operator);
   }
 
   @Delete(':id')
@@ -136,5 +138,17 @@ export class AnimalsController {
   @ApiOperation({ summary: '获取单只动物的笼位变更历史' })
   getAnimalTransferLogs(@Param('id', ParseIntPipe) id: number) {
     return this.animalsService.getTransferLogsByAnimal(id);
+  }
+
+  @Get('status-flow/rules')
+  @ApiOperation({ summary: '获取状态流转规则（有向图边列表）' })
+  getStatusFlowRules() {
+    return this.animalsService.getStatusFlowRules();
+  }
+
+  @Get(':id/status-logs')
+  @ApiOperation({ summary: '获取单只动物的状态变更历史' })
+  getStatusChangeLogs(@Param('id', ParseIntPipe) id: number) {
+    return this.animalsService.getStatusChangeLogs(id);
   }
 }

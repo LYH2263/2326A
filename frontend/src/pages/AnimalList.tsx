@@ -71,6 +71,11 @@ const AnimalList: React.FC = () => {
   const [transferLogs, setTransferLogs] = useState<any[]>([]);
   const [detailTabKey, setDetailTabKey] = useState('basic');
 
+  const [statusFlowRules, setStatusFlowRules] = useState<any[]>([]);
+  const [statusChangeLogs, setStatusChangeLogs] = useState<any[]>([]);
+  const [changeReason, setChangeReason] = useState('');
+  const [statusChanged, setStatusChanged] = useState(false);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -107,7 +112,7 @@ const AnimalList: React.FC = () => {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { fetchSpecies(); fetchCageList(); }, []);
+  useEffect(() => { fetchSpecies(); fetchCageList(); fetchStatusFlowRules(); }, []);
 
   const handleAdd = () => {
     setEditingAnimal(null);
@@ -122,6 +127,8 @@ const AnimalList: React.FC = () => {
       ...record,
       birthDate: record.birthDate ? dayjs(record.birthDate) : null,
     });
+    setChangeReason('');
+    setStatusChanged(false);
     setModalVisible(true);
   };
 
@@ -131,8 +138,10 @@ const AnimalList: React.FC = () => {
       setDetailAnimal(res);
       setDetailTabKey('basic');
       setTransferLogs([]);
+      setStatusChangeLogs([]);
       setDetailVisible(true);
       fetchTransferLogs(id);
+      fetchStatusChangeLogs(id);
     } catch {
       // handled
     }
@@ -145,6 +154,30 @@ const AnimalList: React.FC = () => {
     } catch {
       // handled
     }
+  };
+
+  const fetchStatusFlowRules = async () => {
+    try {
+      const res: any = await animalApi.getStatusFlowRules();
+      setStatusFlowRules(Array.isArray(res) ? res : []);
+    } catch {
+      // handled
+    }
+  };
+
+  const fetchStatusChangeLogs = async (animalId: number) => {
+    try {
+      const res: any = await animalApi.getStatusChangeLogs(animalId);
+      setStatusChangeLogs(Array.isArray(res) ? res : []);
+    } catch {
+      // handled
+    }
+  };
+
+  const getAllowedNextStatuses = (currentStatus: string): string[] => {
+    return statusFlowRules
+      .filter((edge: any) => edge.from === currentStatus)
+      .map((edge: any) => edge.to);
   };
 
   const handleDelete = async (id: number) => {
@@ -161,12 +194,19 @@ const AnimalList: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const payload = {
+      const payload: any = {
         ...values,
         birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : undefined,
       };
 
       if (editingAnimal) {
+        if (values.status && values.status !== editingAnimal.status) {
+          if (!changeReason.trim()) {
+            message.warning('请填写状态变更原因');
+            return;
+          }
+          payload.statusChangeReason = changeReason;
+        }
         await animalApi.update(editingAnimal.id, payload);
         message.success('更新成功');
       } else {
@@ -449,6 +489,165 @@ const AnimalList: React.FC = () => {
         </div>
       ),
     },
+    {
+      key: 'lifecycle',
+      label: '生命周期',
+      children: detailAnimal && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 24 }}>
+            <Title level={5} style={{ marginBottom: 12 }}>状态流转图</Title>
+            <div style={{ background: '#fafafa', borderRadius: 8, padding: 20, overflow: 'auto' }}>
+              <svg width="600" height="280" viewBox="0 0 600 280" style={{ display: 'block', margin: '0 auto' }}>
+                {statusFlowRules.map((edge: any, i: number) => {
+                  const positions: Record<string, { x: number; y: number }> = {
+                    quarantine: { x: 100, y: 40 },
+                    healthy: { x: 300, y: 40 },
+                    in_experiment: { x: 500, y: 40 },
+                    sick: { x: 200, y: 160 },
+                    deceased: { x: 400, y: 220 },
+                  };
+                  const from = positions[edge.from];
+                  const to = positions[edge.to];
+                  if (!from || !to) return null;
+                  const isReachable = edge.from === detailAnimal.status;
+                  const dx = to.x - from.x;
+                  const dy = to.y - from.y;
+                  const len = Math.sqrt(dx * dx + dy * dy);
+                  if (len === 0) return null;
+                  const nx = dx / len;
+                  const ny = dy / len;
+                  const startX = from.x + nx * 45;
+                  const startY = from.y + ny * 22;
+                  const endX = to.x - nx * 45;
+                  const endY = to.y - ny * 22;
+                  return (
+                    <g key={i}>
+                      <defs>
+                        <marker id={`arrow-${i}`} markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L0,6 L9,3 z" fill={isReachable ? '#52c41a' : '#bfbfbf'} />
+                        </marker>
+                      </defs>
+                      <line
+                        x1={startX}
+                        y1={startY}
+                        x2={endX}
+                        y2={endY}
+                        stroke={isReachable ? '#52c41a' : '#bfbfbf'}
+                        strokeWidth={isReachable ? 2 : 1.5}
+                        markerEnd={`url(#arrow-${i})`}
+                      />
+                      {edge.label && (
+                        <text
+                          x={(startX + endX) / 2}
+                          y={(startY + endY) / 2 - 4}
+                          textAnchor="middle"
+                          fontSize="11"
+                          fill={isReachable ? '#52c41a' : '#999'}
+                        >
+                          {edge.label}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+                {[
+                  { key: 'quarantine', label: '隔离中', x: 100, y: 40 },
+                  { key: 'healthy', label: '健康', x: 300, y: 40 },
+                  { key: 'in_experiment', label: '实验中', x: 500, y: 40 },
+                  { key: 'sick', label: '患病', x: 200, y: 160 },
+                  { key: 'deceased', label: '已死亡', x: 400, y: 220 },
+                ].map((node) => {
+                  const isCurrent = node.key === detailAnimal.status;
+                  const allowedNext = getAllowedNextStatuses(detailAnimal.status);
+                  const isReachable = allowedNext.includes(node.key);
+                  let fillColor = '#fff';
+                  let strokeColor = '#d9d9d9';
+                  let textColor = '#666';
+                  if (isCurrent) {
+                    fillColor = '#e6f7ff';
+                    strokeColor = '#1890ff';
+                    textColor = '#1890ff';
+                  } else if (isReachable) {
+                    fillColor = '#f6ffed';
+                    strokeColor = '#52c41a';
+                    textColor = '#52c41a';
+                  }
+                  return (
+                    <g key={node.key}>
+                      <rect
+                        x={node.x - 45}
+                        y={node.y - 22}
+                        width={90}
+                        height={44}
+                        rx={6}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        strokeWidth={isCurrent ? 2 : 1.5}
+                      />
+                      <text
+                        x={node.x}
+                        y={node.y + 5}
+                        textAnchor="middle"
+                        fontSize="13"
+                        fontWeight={isCurrent ? 600 : 400}
+                        fill={textColor}
+                      >
+                        {node.label}
+                        {isCurrent && ' (当前)'}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+            <div style={{ marginTop: 12, display: 'flex', gap: 16, fontSize: 12, color: '#888' }}>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#e6f7ff', border: '2px solid #1890ff', borderRadius: 2, marginRight: 4 }}></span>当前状态</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#f6ffed', border: '1.5px solid #52c41a', borderRadius: 2, marginRight: 4 }}></span>可达状态</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#fff', border: '1.5px solid #d9d9d9', borderRadius: 2, marginRight: 4 }}></span>其他状态</span>
+            </div>
+          </div>
+
+          <Divider style={{ margin: '16px 0' }} />
+
+          <div>
+            <Title level={5} style={{ marginBottom: 12 }}>状态变更历史</Title>
+            {statusChangeLogs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+                暂无状态变更记录
+              </div>
+            ) : (
+              <Timeline
+                mode="left"
+                items={statusChangeLogs.map((log: any) => {
+                  const fromOpt = statusOptions.find(o => o.value === log.fromStatus);
+                  const toOpt = statusOptions.find(o => o.value === log.toStatus);
+                  return {
+                    color: toOpt?.color || 'default',
+                    label: dayjs(log.changedAt).format('YYYY-MM-DD HH:mm'),
+                    children: (
+                      <div>
+                        <Space size={8} wrap>
+                          <Tag color={fromOpt?.color}>{fromOpt?.label || log.fromStatus}</Tag>
+                          <span style={{ color: '#999' }}>→</span>
+                          <Tag color={toOpt?.color}>{toOpt?.label || log.toStatus}</Tag>
+                        </Space>
+                        <div style={{ marginTop: 6, color: '#666', fontSize: 13 }}>
+                          {log.reason && <span>变更原因：{log.reason}</span>}
+                        </div>
+                        <div style={{ marginTop: 2, color: '#999', fontSize: 12 }}>
+                          操作人：{log.operator || '系统'}
+                          {log.experimentId && <span style={{ marginLeft: 12 }}>关联实验：#${log.experimentId}</span>}
+                        </div>
+                      </div>
+                    ),
+                  };
+                })}
+              />
+            )}
+          </div>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -559,11 +758,52 @@ const AnimalList: React.FC = () => {
             <Form.Item name="weight" label="体重(g)">
               <InputNumber style={{ width: '100%' }} min={0} step={0.1} />
             </Form.Item>
-            <Form.Item name="status" label="状态" rules={[{ required: true }]}>
-              <Select>
-                {statusOptions.map(o => <Option key={o.value} value={o.value}>{o.label}</Option>)}
+            <Form.Item
+              name="status"
+              label="状态"
+              rules={[{ required: true }]}
+            >
+              <Select
+                onChange={(value) => {
+                  if (editingAnimal && value !== editingAnimal.status) {
+                    setStatusChanged(true);
+                  } else {
+                    setStatusChanged(false);
+                    setChangeReason('');
+                  }
+                }}
+              >
+                {editingAnimal
+                  ? (() => {
+                      const allowed = getAllowedNextStatuses(editingAnimal.status);
+                      const options = statusOptions.filter(
+                        o => o.value === editingAnimal.status || allowed.includes(o.value)
+                      );
+                      return options.map(o => (
+                        <Option key={o.value} value={o.value}>
+                          {o.label}
+                          {o.value === editingAnimal.status ? ' (当前)' : ''}
+                        </Option>
+                      ));
+                    })()
+                  : statusOptions.map(o => <Option key={o.value} value={o.value}>{o.label}</Option>)
+                }
               </Select>
             </Form.Item>
+            {editingAnimal && statusChanged && (
+              <Form.Item
+                label="变更原因"
+                required
+                style={{ gridColumn: '1 / -1' }}
+              >
+                <TextArea
+                  rows={2}
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  placeholder="请填写状态变更的原因"
+                />
+              </Form.Item>
+            )}
             <Form.Item name="cageNumber" label="笼号">
               <Input placeholder="如 A-101" />
             </Form.Item>

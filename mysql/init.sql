@@ -171,6 +171,25 @@ CREATE TABLE IF NOT EXISTS `feeding_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='饲养记录表';
 
 -- ========================================
+-- 状态变更日志表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `status_change_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `from_status` VARCHAR(50) NOT NULL COMMENT '变更前状态',
+  `to_status` VARCHAR(50) NOT NULL COMMENT '变更后状态',
+  `reason` TEXT COMMENT '变更原因',
+  `operator` VARCHAR(100) DEFAULT NULL COMMENT '操作人',
+  `experiment_id` INT DEFAULT NULL COMMENT '关联实验ID',
+  `changed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_from_status` (`from_status`),
+  INDEX `idx_to_status` (`to_status`),
+  INDEX `idx_changed_at` (`changed_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='状态变更日志表';
+
+-- ========================================
 -- 笼位转移日志表
 -- ========================================
 CREATE TABLE IF NOT EXISTS `cage_transfer_logs` (

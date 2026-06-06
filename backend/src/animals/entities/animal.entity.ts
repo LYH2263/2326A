@@ -10,6 +10,7 @@ import { HealthRecord } from '../../health/entities/health-record.entity';
 import { ExperimentAnimal } from '../../experiments/entities/experiment-animal.entity';
 import { FeedingRecord } from '../../feeding/entities/feeding-record.entity';
 import { CageTransferLog } from './cage-transfer-log.entity';
+import { StatusChangeLog } from './status-change-log.entity';
 
 @Entity('animals')
 export class Animal {
@@ -70,4 +71,7 @@ export class Animal {
 
   @OneToMany(() => CageTransferLog, (log) => log.animal)
   cageTransferLogs: CageTransferLog[];
+
+  @OneToMany(() => StatusChangeLog, (log) => log.animal)
+  statusChangeLogs: StatusChangeLog[];
 }

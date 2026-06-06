@@ -61,6 +61,8 @@ export const animalApi = {
   cageMerge: (data: any) => api.post('/animals/cage-merge', data),
   getTransferLogs: (params?: any) => api.get('/animals/transfer-logs', { params }),
   getAnimalTransferLogs: (id: number) => api.get(`/animals/${id}/transfer-logs`),
+  getStatusFlowRules: () => api.get('/animals/status-flow/rules'),
+  getStatusChangeLogs: (id: number) => api.get(`/animals/${id}/status-logs`),
 };
 
 // ========== 健康记录 API ==========

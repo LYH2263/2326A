@@ -3,9 +3,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
 import { Animal } from './entities/animal.entity';
 import { CageTransferLog } from './entities/cage-transfer-log.entity';
+import { StatusChangeLog } from './entities/status-change-log.entity';
 import { CreateAnimalDto } from './dto/create-animal.dto';
 import { UpdateAnimalDto } from './dto/update-animal.dto';
 import { CageSplitDto, CageMergeDto, CageTransferLogQueryDto } from './dto/cage-transfer.dto';
+import {
+  isStatusTransitionAllowed,
+  getAllowedNextStatuses,
+  getStatusFlowEdges,
+  STATUS_LABELS,
+  StatusFlowEdge,
+} from './status-flow';
 
 @Injectable()
 export class AnimalsService {
@@ -16,6 +24,8 @@ export class AnimalsService {
     private readonly animalRepository: Repository<Animal>,
     @InjectRepository(CageTransferLog)
     private readonly cageTransferLogRepository: Repository<CageTransferLog>,
+    @InjectRepository(StatusChangeLog)
+    private readonly statusChangeLogRepository: Repository<StatusChangeLog>,
   ) {}
 
   async create(createAnimalDto: CreateAnimalDto): Promise<Animal> {
@@ -60,10 +70,47 @@ export class AnimalsService {
     return animal;
   }
 
-  async update(id: number, updateAnimalDto: UpdateAnimalDto): Promise<Animal> {
+  async update(
+    id: number,
+    updateAnimalDto: UpdateAnimalDto,
+    operator?: string,
+  ): Promise<Animal> {
     const animal = await this.findOne(id);
+    const oldStatus = animal.status;
+    const newStatus = updateAnimalDto.status;
+
+    if (newStatus && newStatus !== oldStatus) {
+      if (!isStatusTransitionAllowed(oldStatus, newStatus)) {
+        const allowed = getAllowedNextStatuses(oldStatus);
+        const allowedLabels = allowed.map((s) => STATUS_LABELS[s] || s).join('、');
+        throw new BadRequestException(
+          `状态转换不合法：${STATUS_LABELS[oldStatus] || oldStatus} 不能转换为 ${STATUS_LABELS[newStatus] || newStatus}。合法的目标状态：${allowedLabels || '无'}`,
+        );
+      }
+
+      if (!updateAnimalDto.statusChangeReason?.trim()) {
+        throw new BadRequestException('状态变更时必须填写变更原因');
+      }
+    }
+
     Object.assign(animal, updateAnimalDto);
     const updated = await this.animalRepository.save(animal);
+
+    if (newStatus && newStatus !== oldStatus) {
+      const log = this.statusChangeLogRepository.create({
+        animalId: id,
+        fromStatus: oldStatus,
+        toStatus: newStatus,
+        reason: updateAnimalDto.statusChangeReason,
+        operator,
+        experimentId: updateAnimalDto.experimentId,
+      });
+      await this.statusChangeLogRepository.save(log);
+      this.logger.log(
+        `Status changed for animal #${id}: ${oldStatus} -> ${newStatus} by ${operator || 'unknown'}`,
+      );
+    }
+
     this.logger.log(`Updated animal: ${updated.id}`);
     return updated;
   }
@@ -268,6 +315,17 @@ export class AnimalsService {
     return this.cageTransferLogRepository.find({
       where: { animalId },
       order: { operatedAt: 'DESC' },
+    });
+  }
+
+  getStatusFlowRules(): StatusFlowEdge[] {
+    return getStatusFlowEdges();
+  }
+
+  async getStatusChangeLogs(animalId: number): Promise<StatusChangeLog[]> {
+    return this.statusChangeLogRepository.find({
+      where: { animalId },
+      order: { changedAt: 'DESC' },
     });
   }
 }
