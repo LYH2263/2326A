@@ -10,6 +10,7 @@ import HealthComparison from './pages/HealthComparison';
 import Experiments from './pages/Experiments';
 import FeedingRecords from './pages/FeedingRecords';
 import Statistics from './pages/Statistics';
+import CheckupSchedules from './pages/CheckupSchedules';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -79,6 +80,7 @@ const App: React.FC = () => {
             <Route path="experiments" element={<Experiments />} />
             <Route path="feeding" element={<FeedingRecords />} />
             <Route path="statistics" element={<Statistics />} />
+            <Route path="checkup-schedules" element={<CheckupSchedules />} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
         </Routes>

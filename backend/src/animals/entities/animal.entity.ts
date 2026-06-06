@@ -11,6 +11,7 @@ import { ExperimentAnimal } from '../../experiments/entities/experiment-animal.e
 import { FeedingRecord } from '../../feeding/entities/feeding-record.entity';
 import { CageTransferLog } from './cage-transfer-log.entity';
 import { StatusChangeLog } from './status-change-log.entity';
+import { CheckupSchedule } from '../../checkup-schedules/entities/checkup-schedule.entity';
 
 @Entity('animals')
 export class Animal {
@@ -74,4 +75,7 @@ export class Animal {
 
   @OneToMany(() => StatusChangeLog, (log) => log.animal)
   statusChangeLogs: StatusChangeLog[];
+
+  @OneToMany(() => CheckupSchedule, (schedule) => schedule.animal)
+  checkupSchedules: CheckupSchedule[];
 }

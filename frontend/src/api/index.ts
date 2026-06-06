@@ -110,4 +110,21 @@ export const statisticsApi = {
   getFeedingStats: () => api.get('/statistics/feeding'),
 };
 
+// ========== 体检排班 API ==========
+export const checkupScheduleApi = {
+  getList: (params?: any) => api.get('/checkup-schedules', { params }),
+  getDetail: (id: number) => api.get(`/checkup-schedules/${id}`),
+  create: (data: any) => api.post('/checkup-schedules', data),
+  update: (id: number, data: any) => api.patch(`/checkup-schedules/${id}`, data),
+  delete: (id: number) => api.delete(`/checkup-schedules/${id}`),
+  getByDateRange: (startDate: string, endDate: string, params?: any) =>
+    api.get('/checkup-schedules/date-range', { params: { startDate, endDate, ...params } }),
+  batchCreate: (data: any) => api.post('/checkup-schedules/batch', data),
+  complete: (id: number, data: any) => api.patch(`/checkup-schedules/${id}/complete`, data),
+  cancel: (id: number, notes?: string) =>
+    api.patch(`/checkup-schedules/${id}/cancel`, { notes }),
+  getVeterinarians: () => api.get('/checkup-schedules/veterinarians'),
+  getDailyStats: (date: string) => api.get('/checkup-schedules/daily-stats', { params: { date } }),
+};
+
 export default api;

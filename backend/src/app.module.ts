@@ -1,14 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { AnimalsModule } from './animals/animals.module';
 import { HealthModule } from './health/health.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { FeedingModule } from './feeding/feeding.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { CheckupSchedulesModule } from './checkup-schedules/checkup-schedules.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST || 'localhost',
@@ -30,6 +33,7 @@ import { StatisticsModule } from './statistics/statistics.module';
     ExperimentsModule,
     FeedingModule,
     StatisticsModule,
+    CheckupSchedulesModule,
   ],
 })
 export class AppModule {}

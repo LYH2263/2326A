@@ -263,6 +263,48 @@ INSERT INTO `experiment_animals` (`experiment_id`, `animal_id`, `role`, `join_da
 (5, 12, 'control_group', '2025-09-01', '2025-12-30', '对照组');
 
 -- ========================================
+-- 体检排班表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `checkup_schedules` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `scheduled_date` DATE NOT NULL COMMENT '计划检查日期',
+  `time_slot` ENUM('morning', 'afternoon') NOT NULL DEFAULT 'morning' COMMENT '时间段',
+  `veterinarian` VARCHAR(100) DEFAULT NULL COMMENT '负责兽医',
+  `check_type` ENUM('routine', 'pre_experiment', 'post_treatment', 'follow_up') NOT NULL DEFAULT 'routine' COMMENT '检查类型',
+  `priority` ENUM('normal', 'high', 'urgent') NOT NULL DEFAULT 'normal' COMMENT '优先级',
+  `status` ENUM('scheduled', 'completed', 'missed', 'cancelled') NOT NULL DEFAULT 'scheduled' COMMENT '状态',
+  `health_record_id` INT DEFAULT NULL COMMENT '关联健康记录ID',
+  `notes` TEXT COMMENT '备注',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`health_record_id`) REFERENCES `health_records`(`id`) ON DELETE SET NULL,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_scheduled_date` (`scheduled_date`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_priority` (`priority`),
+  INDEX `idx_veterinarian` (`veterinarian`),
+  INDEX `idx_check_type` (`check_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='体检排班表';
+
+-- ========================================
+-- 种子数据：体检排班
+-- ========================================
+INSERT INTO `checkup_schedules` (`animal_id`, `scheduled_date`, `time_slot`, `veterinarian`, `check_type`, `priority`, `status`, `notes`) VALUES
+(1, '2026-01-15', 'morning', '张医生', 'routine', 'normal', 'scheduled', '月度例行体检'),
+(2, '2026-01-15', 'morning', '张医生', 'routine', 'normal', 'scheduled', '月度例行体检'),
+(3, '2026-01-16', 'afternoon', '李医生', 'pre_experiment', 'high', 'scheduled', '实验期间复查'),
+(5, '2026-01-17', 'morning', '张医生', 'routine', 'normal', 'scheduled', '常规体检'),
+(6, '2026-01-18', 'morning', '王医生', 'routine', 'normal', 'scheduled', 'SD大鼠定期体检'),
+(7, '2026-01-12', 'afternoon', '王医生', 'follow_up', 'urgent', 'missed', '食欲下降复查，已逾期'),
+(8, '2026-01-20', 'morning', '李医生', 'pre_experiment', 'high', 'scheduled', '行为学测试前体检'),
+(9, '2026-01-22', 'morning', '赵医生', 'routine', 'normal', 'scheduled', '兔子定期体检'),
+(10, '2026-01-25', 'morning', '赵医生', 'follow_up', 'high', 'scheduled', '检疫期第二次体检'),
+(11, '2026-01-28', 'morning', '张医生', 'routine', 'normal', 'scheduled', '豚鼠定期体检'),
+(12, '2026-01-28', 'morning', '张医生', 'routine', 'normal', 'scheduled', '豚鼠定期体检');
+
+-- ========================================
 -- 种子数据：饲养记录
 -- ========================================
 INSERT INTO `feeding_records` (`animal_id`, `feed_date`, `feed_time`, `food_type`, `quantity`, `unit`, `water_ml`, `feeder`, `notes`) VALUES
