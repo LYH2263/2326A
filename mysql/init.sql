@@ -129,6 +129,26 @@ CREATE TABLE IF NOT EXISTS `feeding_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='饲养记录表';
 
 -- ========================================
+-- 笼位转移日志表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `cage_transfer_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `from_cage` VARCHAR(50) DEFAULT NULL COMMENT '原笼号',
+  `to_cage` VARCHAR(50) DEFAULT NULL COMMENT '目标笼号',
+  `operation_type` ENUM('move_in', 'move_out', 'cage_split', 'cage_merge') NOT NULL COMMENT '操作类型',
+  `reason` TEXT COMMENT '操作原因',
+  `operator` VARCHAR(100) DEFAULT NULL COMMENT '操作人',
+  `operated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_from_cage` (`from_cage`),
+  INDEX `idx_to_cage` (`to_cage`),
+  INDEX `idx_operation_type` (`operation_type`),
+  INDEX `idx_operated_at` (`operated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='笼位转移日志表';
+
+-- ========================================
 -- 种子数据：动物信息
 -- ========================================
 INSERT INTO `animals` (`name`, `species`, `breed`, `gender`, `birth_date`, `weight`, `status`, `cage_number`, `rfid_tag`, `source`, `description`) VALUES

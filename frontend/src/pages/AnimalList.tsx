@@ -2,16 +2,18 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Space, Tag, Input, Select, Modal, Form,
   InputNumber, DatePicker, message, Popconfirm, Descriptions, Typography, Tooltip,
+  Tabs, Timeline, Divider, Alert, AutoComplete,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
-  EyeOutlined, ReloadOutlined,
+  EyeOutlined, ReloadOutlined, SwapOutlined, MergeCellsOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { animalApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Title, Text } = Typography;
 
 const statusOptions = [
   { value: 'healthy', label: '健康', color: 'success' },
@@ -27,6 +29,13 @@ const genderOptions = [
   { value: 'unknown', label: '未知' },
 ];
 
+const operationTypeMap: Record<string, { label: string; color: string }> = {
+  move_in: { label: '移入', color: 'success' },
+  move_out: { label: '移出', color: 'default' },
+  cage_split: { label: '分笼', color: 'processing' },
+  cage_merge: { label: '合笼', color: 'warning' },
+};
+
 const AnimalList: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
@@ -37,11 +46,30 @@ const AnimalList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [speciesFilter, setSpeciesFilter] = useState<string | undefined>();
   const [speciesList, setSpeciesList] = useState<string[]>([]);
+  const [cageList, setCageList] = useState<string[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [editingAnimal, setEditingAnimal] = useState<any>(null);
   const [detailAnimal, setDetailAnimal] = useState<any>(null);
   const [form] = Form.useForm();
+
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [selectedRows, setSelectedRows] = useState<any[]>([]);
+
+  const [splitModalVisible, setSplitModalVisible] = useState(false);
+  const [splitAnimals, setSplitAnimals] = useState<any[]>([]);
+  const [splitTargetCage, setSplitTargetCage] = useState('');
+  const [splitReason, setSplitReason] = useState('');
+  const [splitLoading, setSplitLoading] = useState(false);
+
+  const [mergeModalVisible, setMergeModalVisible] = useState(false);
+  const [mergeTargetCage, setMergeTargetCage] = useState('');
+  const [mergeReason, setMergeReason] = useState('');
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergeCageGroups, setMergeCageGroups] = useState<Record<string, any[]>>({});
+
+  const [transferLogs, setTransferLogs] = useState<any[]>([]);
+  const [detailTabKey, setDetailTabKey] = useState('basic');
 
   const fetchData = useCallback(async () => {
     try {
@@ -68,8 +96,18 @@ const AnimalList: React.FC = () => {
     }
   };
 
+  const fetchCageList = async () => {
+    try {
+      const res: any = await animalApi.getList({ pageSize: 1000 });
+      const cages = [...new Set((res?.list || []).map((a: any) => a.cageNumber).filter(Boolean))];
+      setCageList(cages.sort());
+    } catch {
+      // handled
+    }
+  };
+
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { fetchSpecies(); }, []);
+  useEffect(() => { fetchSpecies(); fetchCageList(); }, []);
 
   const handleAdd = () => {
     setEditingAnimal(null);
@@ -91,7 +129,19 @@ const AnimalList: React.FC = () => {
     try {
       const res: any = await animalApi.getDetail(id);
       setDetailAnimal(res);
+      setDetailTabKey('basic');
+      setTransferLogs([]);
       setDetailVisible(true);
+      fetchTransferLogs(id);
+    } catch {
+      // handled
+    }
+  };
+
+  const fetchTransferLogs = async (animalId: number) => {
+    try {
+      const res: any = await animalApi.getAnimalTransferLogs(animalId);
+      setTransferLogs(Array.isArray(res) ? res : []);
     } catch {
       // handled
     }
@@ -102,6 +152,7 @@ const AnimalList: React.FC = () => {
       await animalApi.delete(id);
       message.success('删除成功');
       fetchData();
+      fetchCageList();
     } catch {
       // handled
     }
@@ -125,8 +176,133 @@ const AnimalList: React.FC = () => {
       setModalVisible(false);
       fetchData();
       fetchSpecies();
+      fetchCageList();
     } catch {
       // validation or api error
+    }
+  };
+
+  const handleRowSelectionChange = (keys: React.Key[], rows: any[]) => {
+    setSelectedRowKeys(keys as number[]);
+    setSelectedRows(rows);
+  };
+
+  const handleOpenSplit = () => {
+    if (selectedRows.length === 0) {
+      message.warning('请先选择动物');
+      return;
+    }
+    const cages = [...new Set(selectedRows.map(r => r.cageNumber).filter(Boolean))];
+    if (cages.length > 1) {
+      message.warning('分笼操作请选择同一笼位的动物');
+      return;
+    }
+    setSplitAnimals([...selectedRows]);
+    setSplitTargetCage('');
+    setSplitReason('');
+    setSplitModalVisible(true);
+  };
+
+  const handleSplitRemove = (id: number) => {
+    setSplitAnimals(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleSplitSubmit = async () => {
+    if (splitAnimals.length === 0) {
+      message.warning('请至少保留一只动物');
+      return;
+    }
+    if (!splitTargetCage.trim()) {
+      message.warning('请输入目标笼号');
+      return;
+    }
+    try {
+      setSplitLoading(true);
+      const res: any = await animalApi.cageSplit({
+        animalIds: splitAnimals.map(a => a.id),
+        targetCage: splitTargetCage.trim(),
+        reason: splitReason || undefined,
+      });
+      let msg = `成功将 ${splitAnimals.length} 只动物分笼到 ${splitTargetCage}`;
+      if (res?.sourceCageEmpty) {
+        msg += `（原笼位 ${res.sourceCage} 已为空）`;
+      }
+      message.success(msg);
+      setSplitModalVisible(false);
+      setSelectedRowKeys([]);
+      setSelectedRows([]);
+      fetchData();
+      fetchCageList();
+    } catch {
+      // handled
+    } finally {
+      setSplitLoading(false);
+    }
+  };
+
+  const handleOpenMerge = () => {
+    if (selectedRows.length === 0) {
+      message.warning('请先选择动物');
+      return;
+    }
+    const groups: Record<string, any[]> = {};
+    for (const animal of selectedRows) {
+      const cage = animal.cageNumber || '未分笼';
+      if (!groups[cage]) groups[cage] = [];
+      groups[cage].push(animal);
+    }
+    setMergeCageGroups(groups);
+    setMergeTargetCage('');
+    setMergeReason('');
+    setMergeModalVisible(true);
+  };
+
+  const handleMergeSubmit = async () => {
+    if (!mergeTargetCage.trim()) {
+      message.warning('请输入目标笼号');
+      return;
+    }
+    const speciesSet = new Set(selectedRows.map(r => r.species));
+    if (speciesSet.size > 1) {
+      Modal.confirm({
+        title: '不同物种合笼警告',
+        content: `选中的动物包含不同物种：${Array.from(speciesSet).join('、')}，确定要合并到同一笼位吗？`,
+        okText: '确认合笼',
+        cancelText: '取消',
+        onOk: async () => {
+          await doMerge(true);
+        },
+      });
+    } else {
+      await doMerge(false);
+    }
+  };
+
+  const doMerge = async (confirmSpeciesMixed: boolean) => {
+    try {
+      setMergeLoading(true);
+      const res: any = await animalApi.cageMerge({
+        animalIds: selectedRows.map(r => r.id),
+        targetCage: mergeTargetCage.trim(),
+        reason: mergeReason || undefined,
+        confirmSpeciesMixed,
+      });
+      if (res?.success) {
+        let msg = `成功将 ${res.count} 只动物合笼到 ${mergeTargetCage}`;
+        if (res?.emptyCages?.length > 0) {
+          msg += `（空笼：${res.emptyCages.join('、')}）`;
+        }
+        message.success(msg);
+        setMergeModalVisible(false);
+        setSelectedRowKeys([]);
+        setSelectedRows([]);
+        fetchData();
+        fetchCageList();
+      }
+    } catch {
+      // handled
+    } finally {
+      setMergeLoading(false);
     }
   };
 
@@ -165,7 +341,13 @@ const AnimalList: React.FC = () => {
         return <Tag color={opt?.color}>{opt?.label || status}</Tag>;
       },
     },
-    { title: '笼号', dataIndex: 'cageNumber', key: 'cageNumber', width: 80 },
+    {
+      title: '笼号',
+      dataIndex: 'cageNumber',
+      key: 'cageNumber',
+      width: 90,
+      render: (c: string) => c ? <Tag color="blue">{c}</Tag> : '-',
+    },
     {
       title: '出生日期',
       dataIndex: 'birthDate',
@@ -196,18 +378,103 @@ const AnimalList: React.FC = () => {
     },
   ];
 
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: handleRowSelectionChange,
+  };
+
+  const detailTabs = [
+    {
+      key: 'basic',
+      label: '基本信息',
+      children: detailAnimal && (
+        <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small" style={{ marginTop: 16 }}>
+          <Descriptions.Item label="编号">{detailAnimal.name}</Descriptions.Item>
+          <Descriptions.Item label="物种">{detailAnimal.species}</Descriptions.Item>
+          <Descriptions.Item label="品系">{detailAnimal.breed || '-'}</Descriptions.Item>
+          <Descriptions.Item label="性别">{genderOptions.find(o => o.value === detailAnimal.gender)?.label}</Descriptions.Item>
+          <Descriptions.Item label="体重">{detailAnimal.weight ? `${detailAnimal.weight}g` : '-'}</Descriptions.Item>
+          <Descriptions.Item label="状态">
+            <Tag color={statusOptions.find(o => o.value === detailAnimal.status)?.color}>
+              {statusOptions.find(o => o.value === detailAnimal.status)?.label}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="笼号">{detailAnimal.cageNumber || '-'}</Descriptions.Item>
+          <Descriptions.Item label="RFID">{detailAnimal.rfidTag || '-'}</Descriptions.Item>
+          <Descriptions.Item label="出生日期">{detailAnimal.birthDate ? dayjs(detailAnimal.birthDate).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
+          <Descriptions.Item label="来源">{detailAnimal.source || '-'}</Descriptions.Item>
+          <Descriptions.Item label="备注" span={2}>{detailAnimal.description || '-'}</Descriptions.Item>
+          <Descriptions.Item label="创建时间">{dayjs(detailAnimal.createdAt).format('YYYY-MM-DD HH:mm')}</Descriptions.Item>
+          <Descriptions.Item label="更新时间">{dayjs(detailAnimal.updatedAt).format('YYYY-MM-DD HH:mm')}</Descriptions.Item>
+        </Descriptions>
+      ),
+    },
+    {
+      key: 'cage-timeline',
+      label: '笼位轨迹',
+      children: (
+        <div style={{ marginTop: 16 }}>
+          {transferLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+              暂无笼位变更记录
+            </div>
+          ) : (
+            <Timeline
+              mode="left"
+              items={transferLogs.map((log: any) => {
+                const opInfo = operationTypeMap[log.operationType] || { label: log.operationType, color: 'default' };
+                return {
+                  color: opInfo.color,
+                  label: dayjs(log.operatedAt).format('YYYY-MM-DD HH:mm'),
+                  children: (
+                    <div>
+                      <Space size={8}>
+                        <Tag color={opInfo.color}>{opInfo.label}</Tag>
+                        <Text strong>
+                          {log.fromCage || '空'} → {log.toCage || '空'}
+                        </Text>
+                      </Space>
+                      <div style={{ marginTop: 4, color: '#666', fontSize: 13 }}>
+                        {log.reason && <span>原因：{log.reason}</span>}
+                      </div>
+                      <div style={{ marginTop: 2, color: '#999', fontSize: 12 }}>
+                        操作人：{log.operator || '系统'}
+                      </div>
+                    </div>
+                  ),
+                };
+              })}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <Card
         style={{ borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
         title={<span style={{ fontWeight: 600 }}>动物信息管理</span>}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            添加动物
-          </Button>
+          <Space>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button icon={<SwapOutlined />} onClick={handleOpenSplit}>
+                  分笼 ({selectedRowKeys.length})
+                </Button>
+                <Button type="primary" icon={<MergeCellsOutlined />} onClick={handleOpenMerge}>
+                  合笼 ({selectedRowKeys.length})
+                </Button>
+                <Divider type="vertical" />
+              </>
+            )}
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              添加动物
+            </Button>
+          </Space>
         }
       >
-        {/* Search Bar */}
         <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <Input
             placeholder="搜索动物编号"
@@ -246,7 +513,8 @@ const AnimalList: React.FC = () => {
           dataSource={data}
           columns={columns}
           rowKey="id"
-          scroll={{ x: 900 }}
+          rowSelection={rowSelection}
+          scroll={{ x: 1000 }}
           pagination={{
             current: page,
             pageSize,
@@ -259,7 +527,6 @@ const AnimalList: React.FC = () => {
         />
       </Card>
 
-      {/* Add/Edit Modal */}
       <Modal
         title={editingAnimal ? '编辑动物信息' : '添加动物'}
         open={modalVisible}
@@ -313,35 +580,135 @@ const AnimalList: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* Detail Modal */}
       <Modal
         title="动物详细信息"
         open={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
-        width={700}
+        width={750}
+        destroyOnClose
       >
-        {detailAnimal && (
-          <Descriptions bordered column={{ xs: 1, sm: 2 }} size="small" style={{ marginTop: 16 }}>
-            <Descriptions.Item label="编号">{detailAnimal.name}</Descriptions.Item>
-            <Descriptions.Item label="物种">{detailAnimal.species}</Descriptions.Item>
-            <Descriptions.Item label="品系">{detailAnimal.breed || '-'}</Descriptions.Item>
-            <Descriptions.Item label="性别">{genderOptions.find(o => o.value === detailAnimal.gender)?.label}</Descriptions.Item>
-            <Descriptions.Item label="体重">{detailAnimal.weight ? `${detailAnimal.weight}g` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={statusOptions.find(o => o.value === detailAnimal.status)?.color}>
-                {statusOptions.find(o => o.value === detailAnimal.status)?.label}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="笼号">{detailAnimal.cageNumber || '-'}</Descriptions.Item>
-            <Descriptions.Item label="RFID">{detailAnimal.rfidTag || '-'}</Descriptions.Item>
-            <Descriptions.Item label="出生日期">{detailAnimal.birthDate ? dayjs(detailAnimal.birthDate).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
-            <Descriptions.Item label="来源">{detailAnimal.source || '-'}</Descriptions.Item>
-            <Descriptions.Item label="备注" span={2}>{detailAnimal.description || '-'}</Descriptions.Item>
-            <Descriptions.Item label="创建时间">{dayjs(detailAnimal.createdAt).format('YYYY-MM-DD HH:mm')}</Descriptions.Item>
-            <Descriptions.Item label="更新时间">{dayjs(detailAnimal.updatedAt).format('YYYY-MM-DD HH:mm')}</Descriptions.Item>
-          </Descriptions>
-        )}
+        <Tabs
+          activeKey={detailTabKey}
+          onChange={setDetailTabKey}
+          items={detailTabs}
+        />
+      </Modal>
+
+      <Modal
+        title="分笼操作"
+        open={splitModalVisible}
+        onOk={handleSplitSubmit}
+        onCancel={() => setSplitModalVisible(false)}
+        width={720}
+        okText="确认分笼"
+        cancelText="取消"
+        confirmLoading={splitLoading}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+          <div style={{ flex: 1, border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, maxHeight: 360, overflow: 'auto' }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>已选动物（{splitAnimals.length}只）</div>
+            <div style={{ color: '#888', fontSize: 12, marginBottom: 12 }}>点击 × 可取消选择</div>
+            <Space size={[8, 8]} wrap>
+              {splitAnimals.map(a => (
+                <Tag
+                  key={a.id}
+                  color="blue"
+                  closable
+                  onClose={(e) => { e.preventDefault(); handleSplitRemove(a.id); }}
+                  style={{ padding: '4px 8px' }}
+                >
+                  {a.name} ({a.species})
+                </Tag>
+              ))}
+            </Space>
+          </div>
+          <div style={{ width: 260, border: '1px solid #e8e8e8', borderRadius: 8, padding: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 12 }}>目标笼号</div>
+            <AutoComplete
+              placeholder="输入或选择笼号"
+              value={splitTargetCage}
+              onChange={setSplitTargetCage}
+              style={{ width: '100%' }}
+              options={cageList.map(c => ({ value: c }))}
+              allowClear
+            />
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>操作原因</div>
+              <TextArea
+                rows={4}
+                value={splitReason}
+                onChange={(e) => setSplitReason(e.target.value)}
+                placeholder="请输入分笼原因（可选）"
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="合笼操作"
+        open={mergeModalVisible}
+        onOk={handleMergeSubmit}
+        onCancel={() => setMergeModalVisible(false)}
+        width={720}
+        okText="确认合笼"
+        cancelText="取消"
+        confirmLoading={mergeLoading}
+        destroyOnClose
+      >
+        <div style={{ marginTop: 16 }}>
+          <Alert
+            message={`选中 ${selectedRows.length} 只动物，来自 ${Object.keys(mergeCageGroups).length} 个笼位`}
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div style={{ flex: 1, maxHeight: 300, overflow: 'auto' }}>
+              <div style={{ fontWeight: 600, marginBottom: 12 }}>按笼位分组</div>
+              {Object.entries(mergeCageGroups).map(([cage, animals]) => (
+                <div key={cage} style={{ marginBottom: 12, padding: 10, background: '#fafafa', borderRadius: 6 }}>
+                  <div style={{ fontWeight: 500, marginBottom: 6 }}>
+                    <Tag color="blue">{cage}</Tag>
+                    <span style={{ color: '#888', fontSize: 12 }}>共 {animals.length} 只</span>
+                  </div>
+                  <Space size={[6, 6]} wrap>
+                    {animals.map(a => (
+                      <Tag key={a.id}>{a.name}</Tag>
+                    ))}
+                  </Space>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ width: 260 }}>
+              <div style={{ fontWeight: 600, marginBottom: 12 }}>目标笼号</div>
+            <AutoComplete
+              placeholder="输入或选择笼号"
+              value={mergeTargetCage}
+              onChange={setMergeTargetCage}
+              style={{ width: '100%' }}
+              options={cageList.map(c => ({ value: c }))}
+              allowClear
+            />
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>操作原因</div>
+                <TextArea
+                  rows={4}
+                  value={mergeReason}
+                  onChange={(e) => setMergeReason(e.target.value)}
+                  placeholder="请输入合笼原因（可选）"
+                />
+              </div>
+              <div style={{ marginTop: 12, color: '#faad14', fontSize: 12 }}>
+                提示：不同物种合笼将弹出二次确认
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

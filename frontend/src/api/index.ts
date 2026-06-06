@@ -57,6 +57,10 @@ export const animalApi = {
   update: (id: number, data: any) => api.patch(`/animals/${id}`, data),
   delete: (id: number) => api.delete(`/animals/${id}`),
   getSpecies: () => api.get('/animals/species'),
+  cageSplit: (data: any) => api.post('/animals/cage-split', data),
+  cageMerge: (data: any) => api.post('/animals/cage-merge', data),
+  getTransferLogs: (params?: any) => api.get('/animals/transfer-logs', { params }),
+  getAnimalTransferLogs: (id: number) => api.get(`/animals/${id}/transfer-logs`),
 };
 
 // ========== 健康记录 API ==========
