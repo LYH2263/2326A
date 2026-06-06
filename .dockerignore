@@ -1,0 +1,12 @@
+node_modules
+.git
+.gitignore
+.DS_Store
+*.md
+.idea
+.vscode
+dist
+build
+__pycache__
+.env.local
+.env.development

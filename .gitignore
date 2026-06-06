@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.DS_Store
+.env.local
+.env.development
+*.log
+.idea/
+.vscode/
+__pycache__/
+.venv/
+coverage/
+.nyc_output/
+
+# 文档/对话
+对话/
+题目.md
+迭代.md
+代码生成.md
