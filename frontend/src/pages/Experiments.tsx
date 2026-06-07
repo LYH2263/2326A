@@ -2,13 +2,13 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Card, Table, Button, Space, Tag, Input, Select, Modal, Form,
   DatePicker, message, Popconfirm, Tooltip, Typography, Descriptions, List, Badge,
-  Tabs, Empty, Divider, Table as AntTable,
+  Tabs, Empty, Divider, Table as AntTable, InputNumber,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
   EyeOutlined, ReloadOutlined, ExperimentOutlined, UserAddOutlined,
   FileTextOutlined, BarChartOutlined, DownloadOutlined, SaveOutlined,
-  TableOutlined,
+  TableOutlined, AppstoreAddOutlined, DeleteRowOutlined,
 } from '@ant-design/icons';
 import { Line } from '@ant-design/plots';
 import dayjs from 'dayjs';
@@ -34,6 +34,19 @@ const dataTypeOptions = [
   { value: 'option', label: '选项型' },
 ];
 
+interface BatchRow {
+  key: string;
+  animalId: number | null;
+  collectedAt: dayjs.Dayjs | null;
+  metricName: string;
+  dataType: string;
+  numericValue: number | null;
+  textValue: string;
+  optionValue: string;
+  unit: string;
+  notes: string;
+}
+
 const Experiments: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
@@ -46,6 +59,7 @@ const Experiments: React.FC = () => {
   const [detailVisible, setDetailVisible] = useState(false);
   const [addAnimalVisible, setAddAnimalVisible] = useState(false);
   const [addDataPointVisible, setAddDataPointVisible] = useState(false);
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
   const [editingExperiment, setEditingExperiment] = useState<any>(null);
   const [detailExperiment, setDetailExperiment] = useState<any>(null);
   const [animals, setAnimals] = useState<any[]>([]);
@@ -64,11 +78,12 @@ const Experiments: React.FC = () => {
   const [editingDataPoint, setEditingDataPoint] = useState<any>(null);
 
   const [activeTab, setActiveTab] = useState('basic');
-  const [reportMetric, setReportMetric] = useState<string>('');
-  const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
-  const [statisticsData, setStatisticsData] = useState<any[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportData, setReportData] = useState<Record<string, { timeSeries: any[]; statistics: any[] }>>({});
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const [batchRows, setBatchRows] = useState<BatchRow[]>([]);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -288,23 +303,117 @@ const Experiments: React.FC = () => {
     }
   };
 
-  const fetchReportData = async (metricName: string) => {
-    if (!detailExperiment?.id || !metricName) return;
+  const createEmptyRow = (): BatchRow => ({
+    key: Math.random().toString(36).slice(2),
+    animalId: null,
+    collectedAt: dayjs(),
+    metricName: '',
+    dataType: 'numeric',
+    numericValue: null,
+    textValue: '',
+    optionValue: '',
+    unit: '',
+    notes: '',
+  });
+
+  const openBatchModal = () => {
+    setBatchRows([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
+    setBatchModalVisible(true);
+  };
+
+  const addBatchRow = () => {
+    setBatchRows([...batchRows, createEmptyRow()]);
+  };
+
+  const removeBatchRow = (key: string) => {
+    if (batchRows.length <= 1) {
+      message.warning('至少保留一行');
+      return;
+    }
+    setBatchRows(batchRows.filter(r => r.key !== key));
+  };
+
+  const updateBatchRow = (key: string, field: keyof BatchRow, value: any) => {
+    setBatchRows(batchRows.map(row =>
+      row.key === key ? { ...row, [field]: value } : row
+    ));
+  };
+
+  const handleBatchSubmit = async () => {
+    const validRows = batchRows.filter(row =>
+      row.animalId && row.metricName && row.collectedAt &&
+      (
+        (row.dataType === 'numeric' && row.numericValue !== null) ||
+        (row.dataType === 'text' && row.textValue) ||
+        (row.dataType === 'option' && row.optionValue)
+      )
+    );
+
+    if (validRows.length === 0) {
+      message.error('请至少填写一行有效数据');
+      return;
+    }
+
+    const invalidRows = batchRows.length - validRows.length;
+    if (invalidRows > 0) {
+      message.warning(`有 ${invalidRows} 行数据不完整，将被跳过`);
+    }
+
+    try {
+      setBatchSubmitting(true);
+      const points = validRows.map(row => ({
+        experimentId: detailExperiment.id,
+        animalId: row.animalId!,
+        metricName: row.metricName,
+        dataType: row.dataType,
+        collectedAt: row.collectedAt!.format('YYYY-MM-DD HH:mm:ss'),
+        unit: row.unit || undefined,
+        notes: row.notes || undefined,
+        numericValue: row.dataType === 'numeric' ? row.numericValue! : undefined,
+        textValue: row.dataType === 'text' ? row.textValue : undefined,
+        optionValue: row.dataType === 'option' ? row.optionValue : undefined,
+      }));
+
+      await experimentDataPointApi.batchCreate({ points });
+      message.success(`成功录入 ${validRows.length} 条数据`);
+      setBatchModalVisible(false);
+      fetchDataPoints();
+      fetchMetricNames();
+    } catch {
+    } finally {
+      setBatchSubmitting(false);
+    }
+  };
+
+  const fetchAllReportData = async () => {
+    if (!detailExperiment?.id || metricNames.length === 0) return;
     try {
       setReportLoading(true);
-      const [timeSeries, stats] = await Promise.all([
-        experimentDataPointApi.getTimeSeries({
-          experimentId: detailExperiment.id,
-          metricName,
-        }),
-        experimentDataPointApi.getStatistics({
-          experimentId: detailExperiment.id,
-          metricName,
-          groupBy: 'animal',
-        }),
-      ]);
-      setTimeSeriesData((timeSeries as unknown as any[]) || []);
-      setStatisticsData((stats as unknown as any[]) || []);
+      const allData: Record<string, { timeSeries: any[]; statistics: any[] }> = {};
+
+      for (const metric of metricNames) {
+        try {
+          const [timeSeries, stats] = await Promise.all([
+            experimentDataPointApi.getTimeSeries({
+              experimentId: detailExperiment.id,
+              metricName: metric,
+            }),
+            experimentDataPointApi.getStatistics({
+              experimentId: detailExperiment.id,
+              metricName: metric,
+              groupBy: 'animal',
+            }),
+          ]);
+          allData[metric] = {
+            timeSeries: (timeSeries as unknown as any[]) || [],
+            statistics: (stats as unknown as any[]) || [],
+          };
+        } catch {
+          allData[metric] = { timeSeries: [], statistics: [] };
+        }
+      }
+
+      setReportData(allData);
     } catch {
     } finally {
       setReportLoading(false);
@@ -313,20 +422,9 @@ const Experiments: React.FC = () => {
 
   useEffect(() => {
     if (detailVisible && activeTab === 'report' && metricNames.length > 0) {
-      if (!reportMetric && metricNames.length > 0) {
-        const firstNumericMetric = metricNames[0];
-        setReportMetric(firstNumericMetric);
-        fetchReportData(firstNumericMetric);
-      } else if (reportMetric) {
-        fetchReportData(reportMetric);
-      }
+      fetchAllReportData();
     }
-  }, [detailVisible, activeTab, metricNames]);
-
-  const handleMetricChange = (metric: string) => {
-    setReportMetric(metric);
-    fetchReportData(metric);
-  };
+  }, [detailVisible, activeTab, metricNames.length]);
 
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
@@ -355,12 +453,6 @@ const Experiments: React.FC = () => {
       message.error('PDF导出失败');
     }
   };
-
-  const chartData = timeSeriesData.map((item: any) => ({
-    time: dayjs(item.collectedAt).format('YYYY-MM-DD HH:mm'),
-    value: Number(item.value),
-    animal: item.animalName || `动物#${item.animalId}`,
-  }));
 
   const columns = [
     {
@@ -469,6 +561,148 @@ const Experiments: React.FC = () => {
     },
   ];
 
+  const batchColumns = [
+    {
+      title: '动物',
+      dataIndex: 'animalId',
+      key: 'animalId',
+      width: 180,
+      render: (_: any, record: BatchRow) => (
+        <Select
+          placeholder="选择动物"
+          style={{ width: '100%' }}
+          value={record.animalId || undefined}
+          onChange={(v) => updateBatchRow(record.key, 'animalId', v)}
+        >
+          {experimentAnimals.map((ea: any) => (
+            <Option key={ea.animalId} value={ea.animalId}>
+              {ea.animal?.name || `#${ea.animalId}`} ({ea.role || '-'})
+            </Option>
+          ))}
+        </Select>
+      ),
+    },
+    {
+      title: '采集时间',
+      dataIndex: 'collectedAt',
+      key: 'collectedAt',
+      width: 180,
+      render: (_: any, record: BatchRow) => (
+        <DatePicker
+          showTime
+          style={{ width: '100%' }}
+          format="YYYY-MM-DD HH:mm"
+          value={record.collectedAt}
+          onChange={(v) => updateBatchRow(record.key, 'collectedAt', v)}
+        />
+      ),
+    },
+    {
+      title: '指标名称',
+      dataIndex: 'metricName',
+      key: 'metricName',
+      width: 140,
+      render: (_: any, record: BatchRow) => (
+        <Input
+          placeholder="如 tumor_volume"
+          value={record.metricName}
+          onChange={(e) => updateBatchRow(record.key, 'metricName', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '数据类型',
+      dataIndex: 'dataType',
+      key: 'dataType',
+      width: 100,
+      render: (_: any, record: BatchRow) => (
+        <Select
+          style={{ width: '100%' }}
+          value={record.dataType}
+          onChange={(v) => updateBatchRow(record.key, 'dataType', v)}
+        >
+          {dataTypeOptions.map(o => <Option key={o.value} value={o.value}>{o.label}</Option>)}
+        </Select>
+      ),
+    },
+    {
+      title: '数值内容',
+      key: 'value',
+      width: 160,
+      render: (_: any, record: BatchRow) => {
+        if (record.dataType === 'numeric') {
+          return (
+            <InputNumber
+              style={{ width: '100%' }}
+              placeholder="数值"
+              value={record.numericValue}
+              onChange={(v) => updateBatchRow(record.key, 'numericValue', v)}
+            />
+          );
+        }
+        if (record.dataType === 'text') {
+          return (
+            <Input
+              placeholder="文本内容"
+              value={record.textValue}
+              onChange={(e) => updateBatchRow(record.key, 'textValue', e.target.value)}
+            />
+          );
+        }
+        if (record.dataType === 'option') {
+          return (
+            <Input
+              placeholder="选项值"
+              value={record.optionValue}
+              onChange={(e) => updateBatchRow(record.key, 'optionValue', e.target.value)}
+            />
+          );
+        }
+        return null;
+      },
+    },
+    {
+      title: '单位',
+      dataIndex: 'unit',
+      key: 'unit',
+      width: 100,
+      render: (_: any, record: BatchRow) => (
+        <Input
+          placeholder="单位"
+          value={record.unit}
+          onChange={(e) => updateBatchRow(record.key, 'unit', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '备注',
+      dataIndex: 'notes',
+      key: 'notes',
+      width: 120,
+      render: (_: any, record: BatchRow) => (
+        <Input
+          placeholder="备注"
+          value={record.notes}
+          onChange={(e) => updateBatchRow(record.key, 'notes', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 70,
+      fixed: 'right' as const,
+      render: (_: any, record: BatchRow) => (
+        <Button
+          type="text"
+          danger
+          icon={<DeleteRowOutlined />}
+          onClick={() => removeBatchRow(record.key)}
+        />
+      ),
+    },
+  ];
+
   const tabItems = [
     {
       key: 'basic',
@@ -485,6 +719,63 @@ const Experiments: React.FC = () => {
   ];
 
   const experimentAnimals = detailExperiment?.experimentAnimals || [];
+
+  const renderChart = (metric: string, data: any[]) => {
+    const chartData = data.map((item: any) => ({
+      time: dayjs(item.collectedAt).format('YYYY-MM-DD HH:mm'),
+      value: Number(item.value),
+      animal: item.animalName || `动物#${item.animalId}`,
+    }));
+
+    if (chartData.length === 0) {
+      return <Empty description="暂无数据" style={{ padding: '40px 0' }} />;
+    }
+
+    return (
+      <div style={{ height: 300 }}>
+        <Line
+          data={chartData}
+          xField="time"
+          yField="value"
+          seriesField="animal"
+          smooth
+          point={{ size: 3 }}
+          legend={{ position: 'top' }}
+          xAxis={{ label: { autoRotate: true } }}
+        />
+      </div>
+    );
+  };
+
+  const renderStatisticsTable = (data: any[]) => {
+    if (data.length === 0) {
+      return <Empty description="暂无统计数据" style={{ padding: '20px 0' }} />;
+    }
+
+    return (
+      <AntTable
+        size="small"
+        dataSource={data}
+        rowKey="animalId"
+        pagination={false}
+        columns={[
+          { title: '动物', dataIndex: 'animalName', key: 'animalName', width: 120, render: (v: string, r: any) => v || `动物#${r.animalId}` },
+          { title: '数据点数', dataIndex: 'count', key: 'count', width: 100 },
+          { title: '均值', dataIndex: 'avgValue', key: 'avgValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
+          { title: '最小值', dataIndex: 'minValue', key: 'minValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
+          { title: '最大值', dataIndex: 'maxValue', key: 'maxValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
+          { title: '标准差', dataIndex: 'stdValue', key: 'stdValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
+        ]}
+      />
+    );
+  };
+
+  const numericMetrics = metricNames.filter(m => {
+    const d = reportData[m];
+    return d && d.timeSeries.length > 0 && d.timeSeries.some((item: any) => item.value !== null && item.value !== undefined);
+  });
+
+  const otherMetrics = metricNames.filter(m => !numericMetrics.includes(m));
 
   return (
     <div>
@@ -591,8 +882,9 @@ const Experiments: React.FC = () => {
         open={detailVisible}
         onCancel={() => setDetailVisible(false)}
         footer={null}
-        width={1000}
+        width={1100}
         destroyOnClose
+        style={{ top: 20 }}
       >
         {detailExperiment && (
           <>
@@ -678,12 +970,17 @@ const Experiments: React.FC = () => {
                       </Option>
                     ))}
                   </Select>
-                  <Button icon={<ReloadOutlined />} onClick={() => { setFilterMetric(undefined); setFilterAnimal(undefined); setDataPointsPage(1); }}>
+                  <Button icon={<ReloadOutlined />} onClick={() => { setFilterMetric(undefined); setFilterAnimal(undefined); setDataPointsPage(1); fetchDataPoints(); }}>
                     重置
                   </Button>
-                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDataPoint} style={{ marginLeft: 'auto' }}>
-                    添加数据点
-                  </Button>
+                  <Space style={{ marginLeft: 'auto' }}>
+                    <Button icon={<AppstoreAddOutlined />} onClick={openBatchModal}>
+                      批量录入
+                    </Button>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDataPoint}>
+                      添加数据点
+                    </Button>
+                  </Space>
                 </div>
 
                 <Table
@@ -698,29 +995,20 @@ const Experiments: React.FC = () => {
                     showTotal: (t) => `共 ${t} 条数据`,
                     onChange: (p, ps) => { setDataPointsPage(p); setDataPointsPageSize(ps); },
                   }}
-                  locale={{ emptyText: '暂无数据点，请点击"添加数据点"开始采集' }}
+                  locale={{ emptyText: '暂无数据点，请点击"批量录入"或"添加数据点"开始采集' }}
                 />
               </div>
             )}
 
             {activeTab === 'report' && (
               <div style={{ paddingTop: 8 }}>
-                <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <Text strong>选择指标：</Text>
-                  <Select
-                    placeholder="请选择指标"
-                    style={{ width: 200 }}
-                    value={reportMetric || undefined}
-                    onChange={handleMetricChange}
-                    allowClear={false}
-                  >
-                    {metricNames.map(m => <Option key={m} value={m}>{m}</Option>)}
-                  </Select>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text strong>实验数据报告（共 {metricNames.length} 个指标）</Text>
                   <Button
                     type="primary"
                     icon={<DownloadOutlined />}
                     onClick={handleExportPDF}
-                    style={{ marginLeft: 'auto' }}
+                    disabled={metricNames.length === 0}
                   >
                     导出PDF
                   </Button>
@@ -729,13 +1017,23 @@ const Experiments: React.FC = () => {
                 {metricNames.length === 0 ? (
                   <Empty description="暂无数据，无法生成报告" />
                 ) : (
-                  <div ref={reportRef} style={{ background: '#fff', padding: 20, borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                  <div
+                    ref={reportRef}
+                    style={{
+                      background: '#fff',
+                      padding: 24,
+                      borderRadius: 8,
+                      border: '1px solid #f0f0f0',
+                      maxHeight: '60vh',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    <div style={{ textAlign: 'center', marginBottom: 24 }}>
                       <Title level={3} style={{ marginBottom: 4 }}>{detailExperiment.name}</Title>
                       <Text type="secondary">项目编号：{detailExperiment.projectCode} | 生成时间：{dayjs().format('YYYY-MM-DD HH:mm')}</Text>
                     </div>
 
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 20 }}>
                       <Title level={5} style={{ marginBottom: 8 }}>一、实验基本信息</Title>
                       <Descriptions bordered size="small" column={2}>
                         <Descriptions.Item label="项目名称">{detailExperiment.name}</Descriptions.Item>
@@ -753,7 +1051,7 @@ const Experiments: React.FC = () => {
                       </Descriptions>
                     </div>
 
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 20 }}>
                       <Title level={5} style={{ marginBottom: 8 }}>二、关联动物信息</Title>
                       <AntTable
                         size="small"
@@ -771,49 +1069,47 @@ const Experiments: React.FC = () => {
                       />
                     </div>
 
-                    <div style={{ marginBottom: 16 }}>
-                      <Title level={5} style={{ marginBottom: 8 }}>三、{reportMetric} 趋势图</Title>
-                      {chartData.length > 0 ? (
-                        <div style={{ height: 320 }}>
-                          <Line
-                            data={chartData}
-                            xField="time"
-                            yField="value"
-                            seriesField="animal"
-                            smooth
-                            point={{ size: 3 }}
-                            legend={{ position: 'top' }}
-                            xAxis={{ label: { autoRotate: true } }}
-                          />
-                        </div>
+                    <div style={{ marginBottom: 20 }}>
+                      <Title level={5} style={{ marginBottom: 12 }}>三、指标数据汇总</Title>
+                      {reportLoading ? (
+                        <Empty description="加载中..." style={{ padding: '40px 0' }} />
                       ) : (
-                        <Empty description="暂无趋势数据" />
+                        <>
+                          {numericMetrics.map((metric, idx) => (
+                            <div key={metric} style={{ marginBottom: 24 }}>
+                              <Divider orientation="left" orientationMargin={0} style={{ margin: '0 0 12px 0' }}>
+                                <Text strong>指标 {idx + 1}：{metric}</Text>
+                              </Divider>
+                              <div style={{ marginBottom: 12 }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>趋势图</Text>
+                                {renderChart(metric, reportData[metric]?.timeSeries || [])}
+                              </div>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 13 }}>统计数据</Text>
+                                {renderStatisticsTable(reportData[metric]?.statistics || [])}
+                              </div>
+                            </div>
+                          ))}
+                          {otherMetrics.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                              <Divider orientation="left" orientationMargin={0} style={{ margin: '0 0 12px 0' }}>
+                                <Text strong>其他指标（非数值型）</Text>
+                              </Divider>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {otherMetrics.map(m => (
+                                  <Tag key={m} color="blue">{m}</Tag>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {numericMetrics.length === 0 && otherMetrics.length === 0 && (
+                            <Empty description="暂无指标数据" style={{ padding: '40px 0' }} />
+                          )}
+                        </>
                       )}
                     </div>
 
-                    <div style={{ marginBottom: 16 }}>
-                      <Title level={5} style={{ marginBottom: 8 }}>四、{reportMetric} 统计数据</Title>
-                      {statisticsData.length > 0 ? (
-                        <AntTable
-                          size="small"
-                          dataSource={statisticsData}
-                          rowKey="animalId"
-                          pagination={false}
-                          columns={[
-                            { title: '动物', dataIndex: 'animalName', key: 'animalName', width: 120, render: (v: string, r: any) => v || `动物#${r.animalId}` },
-                            { title: '数据点数', dataIndex: 'count', key: 'count', width: 100 },
-                            { title: '均值', dataIndex: 'avgValue', key: 'avgValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
-                            { title: '最小值', dataIndex: 'minValue', key: 'minValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
-                            { title: '最大值', dataIndex: 'maxValue', key: 'maxValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
-                            { title: '标准差', dataIndex: 'stdValue', key: 'stdValue', render: (v: number) => v ? Number(v).toFixed(2) : '-' },
-                          ]}
-                        />
-                      ) : (
-                        <Empty description="暂无统计数据" />
-                      )}
-                    </div>
-
-                    <div style={{ textAlign: 'center', marginTop: 30, paddingTop: 16, borderTop: '1px dashed #d9d9d9' }}>
+                    <div style={{ textAlign: 'center', marginTop: 20, paddingTop: 16, borderTop: '1px dashed #d9d9d9' }}>
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         — 实验动物信息管理系统 · 自动生成 —
                       </Text>
@@ -929,6 +1225,35 @@ const Experiments: React.FC = () => {
             <TextArea rows={2} placeholder="备注信息" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="批量录入数据点"
+        open={batchModalVisible}
+        onOk={handleBatchSubmit}
+        onCancel={() => setBatchModalVisible(false)}
+        width={1000}
+        okText="提交录入"
+        cancelText="取消"
+        confirmLoading={batchSubmitting}
+        destroyOnClose
+      >
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text type="secondary">支持一次性录入多行数据，提交前请检查数据完整性</Text>
+          <Button size="small" icon={<PlusOutlined />} onClick={addBatchRow}>
+            新增一行
+          </Button>
+        </div>
+        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <Table
+            dataSource={batchRows}
+            columns={batchColumns}
+            rowKey="key"
+            pagination={false}
+            size="small"
+            scroll={{ x: 1000 }}
+          />
+        </div>
       </Modal>
     </div>
   );
