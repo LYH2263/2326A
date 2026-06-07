@@ -833,8 +833,18 @@ const AnimalList: React.FC = () => {
     return edge?.requiresApproval ?? false;
   };
 
+  const getDirectlyChangeableStatuses = (currentStatus: string): string[] => {
+    return statusFlowRules
+      .filter((e: any) => e.from === currentStatus && !e.requiresApproval)
+      .map((e: any) => e.to);
+  };
+
   const handleOpenStatusChange = () => {
     if (!detailAnimal) return;
+    if (statusFlowRules.length === 0) {
+      message.warning('状态流转规则加载中，请稍候...');
+      return;
+    }
     setStatusChangeTarget('');
     setStatusChangeReason('');
     setStatusChangeModalVisible(true);
@@ -1600,6 +1610,7 @@ const AnimalList: React.FC = () => {
               rules={[{ required: true }]}
             >
               <Select
+                disabled={editingAnimal && statusFlowRules.length === 0}
                 onChange={(value) => {
                   if (editingAnimal && value !== editingAnimal.status) {
                     setStatusChanged(true);
@@ -1608,12 +1619,13 @@ const AnimalList: React.FC = () => {
                     setChangeReason('');
                   }
                 }}
+                placeholder={editingAnimal && statusFlowRules.length === 0 ? '加载中...' : undefined}
               >
-                {editingAnimal
+                {editingAnimal && statusFlowRules.length > 0
                   ? (() => {
-                      const allowed = getAllowedNextStatuses(editingAnimal.status);
+                      const directAllowed = getDirectlyChangeableStatuses(editingAnimal.status);
                       const options = statusOptions.filter(
-                        o => o.value === editingAnimal.status || allowed.includes(o.value)
+                        o => o.value === editingAnimal.status || directAllowed.includes(o.value)
                       );
                       return options.map(o => (
                         <Option key={o.value} value={o.value}>
@@ -1662,14 +1674,17 @@ const AnimalList: React.FC = () => {
             <span>动物详细信息</span>
             {detailAnimal && (
               <Space size="small">
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<SwapOutlined />}
-                  onClick={handleOpenStatusChange}
-                >
-                  变更状态
-                </Button>
+                <Tooltip title={statusFlowRules.length === 0 ? '状态规则加载中...' : ''}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<SwapOutlined />}
+                    onClick={handleOpenStatusChange}
+                    disabled={statusFlowRules.length === 0}
+                  >
+                    变更状态
+                  </Button>
+                </Tooltip>
                 <Button
                   size="small"
                   type="primary"
