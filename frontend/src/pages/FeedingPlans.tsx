@@ -48,7 +48,7 @@ import {
   UnorderedListOutlined,
   LeftOutlined,
   RightOutlined,
-  HoldOutlined,
+  PauseOutlined,
   RiseOutlined,
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
@@ -675,7 +675,7 @@ const FeedingPlans: React.FC = () => {
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                          {task.status === 'pending' && <HoldOutlined style={{ fontSize: 10, color: '#999' }} />}
+                          {task.status === 'pending' && <PauseOutlined style={{ fontSize: 10, color: '#999' }} />}
                           <Text ellipsis={{ tooltip: task.animal?.name }} style={{ fontSize: 12, fontWeight: 500 }}>
                             {task.animal?.name || `#${task.animalId}`}
                           </Text>
@@ -846,7 +846,7 @@ const FeedingPlans: React.FC = () => {
                         }}
                         title={`${task.animal?.name || `#${task.animalId}`} - ${task.foodType}`}
                       >
-                        <HoldOutlined style={{ fontSize: 9, marginRight: 2, opacity: task.status === 'pending' ? 1 : 0 }} />
+                        <PauseOutlined style={{ fontSize: 9, marginRight: 2, opacity: task.status === 'pending' ? 1 : 0 }} />
                         {task.taskTime?.slice(0, 5)} {task.animal?.name?.slice(0, 4) || `#${task.animalId}`}
                       </div>
                     ))}
@@ -898,7 +898,7 @@ const FeedingPlans: React.FC = () => {
         </Text>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {dailyStats.slice(-viewMode === 'week' ? 7 : 14).map((stat: any) => {
+          {dailyStats.slice(-(viewMode === 'week' ? 7 : 14)).map((stat: any) => {
             const isToday = dayjs(stat.date).isSame(dayjs(), 'day');
             const statusColor = stat.completionRate >= 80 ? '#52c41a' : stat.completionRate >= 50 ? '#faad14' : stat.total > 0 ? '#ff4d4f' : '#d9d9d9';
 
