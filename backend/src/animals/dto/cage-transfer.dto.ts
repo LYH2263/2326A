@@ -1,10 +1,11 @@
-import { IsArray, IsString, IsOptional, IsEnum, IsNotEmpty, ArrayMinSize } from 'class-validator';
+import { IsArray, IsString, IsOptional, IsEnum, IsNotEmpty, ArrayMinSize, IsBoolean, IsNumber } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CageSplitDto {
   @ApiProperty({ description: '动物ID列表', type: [Number] })
   @IsArray()
   @ArrayMinSize(1)
+  @IsNumber({}, { each: true })
   animalIds: number[];
 
   @ApiProperty({ description: '目标笼号' })
@@ -22,6 +23,7 @@ export class CageMergeDto {
   @ApiProperty({ description: '动物ID列表', type: [Number] })
   @IsArray()
   @ArrayMinSize(1)
+  @IsNumber({}, { each: true })
   animalIds: number[];
 
   @ApiProperty({ description: '目标笼号' })
@@ -36,6 +38,7 @@ export class CageMergeDto {
 
   @ApiPropertyOptional({ description: '是否确认不同物种合并' })
   @IsOptional()
+  @IsBoolean()
   confirmSpeciesMixed?: boolean;
 }
 

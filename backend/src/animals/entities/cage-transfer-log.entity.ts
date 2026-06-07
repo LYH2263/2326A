@@ -6,7 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Animal } from '../../animals/entities/animal.entity';
+import { Animal } from './animal.entity';
 
 @Entity('cage_transfer_logs')
 export class CageTransferLog {
@@ -18,8 +18,9 @@ export class CageTransferLog {
 
   @ManyToOne(() => Animal, (animal) => animal.cageTransferLogs, {
     onDelete: 'CASCADE',
+    orphanedRowAction: 'delete',
   })
-  @JoinColumn({ name: 'animal_id' })
+  @JoinColumn({ name: 'animal_id', referencedColumnName: 'id' })
   animal: Animal;
 
   @Column({ name: 'from_cage', length: 50, nullable: true })
@@ -29,10 +30,11 @@ export class CageTransferLog {
   toCage: string;
 
   @Column({
+    name: 'operation_type',
     type: 'enum',
     enum: ['move_in', 'move_out', 'cage_split', 'cage_merge'],
   })
-  operationType: string;
+  operationType: 'move_in' | 'move_out' | 'cage_split' | 'cage_merge';
 
   @Column({ type: 'text', nullable: true })
   reason: string;

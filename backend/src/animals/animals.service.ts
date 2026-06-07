@@ -194,14 +194,14 @@ export class AnimalsService {
     const sourceCage = sourceCages[0];
 
     await this.animalRepository.manager.transaction(async (manager) => {
-      const logs: CageTransferLog[] = [];
+      const logRepo = manager.getRepository(CageTransferLog);
 
       for (const animal of animals) {
         const fromCage = animal.cageNumber;
         animal.cageNumber = targetCage;
         await manager.save(animal);
 
-        const log = this.cageTransferLogRepository.create({
+        const log = logRepo.create({
           animalId: animal.id,
           fromCage,
           toCage: targetCage,
@@ -209,10 +209,8 @@ export class AnimalsService {
           reason,
           operator,
         });
-        logs.push(log);
+        await logRepo.save(log);
       }
-
-      await manager.save(logs);
     });
 
     const remainingCount = await this.animalRepository.count({
@@ -261,14 +259,14 @@ export class AnimalsService {
     const emptyCages: string[] = [];
 
     await this.animalRepository.manager.transaction(async (manager) => {
-      const logs: CageTransferLog[] = [];
+      const logRepo = manager.getRepository(CageTransferLog);
 
       for (const animal of animals) {
         const fromCage = animal.cageNumber;
         animal.cageNumber = targetCage;
         await manager.save(animal);
 
-        const log = this.cageTransferLogRepository.create({
+        const log = logRepo.create({
           animalId: animal.id,
           fromCage,
           toCage: targetCage,
@@ -276,10 +274,8 @@ export class AnimalsService {
           reason,
           operator,
         });
-        logs.push(log);
+        await logRepo.save(log);
       }
-
-      await manager.save(logs);
     });
 
     for (const cage of sourceCages) {
