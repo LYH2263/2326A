@@ -9,6 +9,7 @@ import HealthRecords from './pages/HealthRecords';
 import HealthComparison from './pages/HealthComparison';
 import Experiments from './pages/Experiments';
 import FeedingRecords from './pages/FeedingRecords';
+import FeedingPlans from './pages/FeedingPlans';
 import Statistics from './pages/Statistics';
 import CheckupSchedules from './pages/CheckupSchedules';
 import BreedingRecords from './pages/BreedingRecords';
@@ -80,6 +81,7 @@ const App: React.FC = () => {
             <Route path="health-comparison" element={<HealthComparison />} />
             <Route path="experiments" element={<Experiments />} />
             <Route path="feeding" element={<FeedingRecords />} />
+            <Route path="feeding-plans" element={<FeedingPlans />} />
             <Route path="statistics" element={<Statistics />} />
             <Route path="checkup-schedules" element={<CheckupSchedules />} />
             <Route path="breeding-records" element={<BreedingRecords />} />

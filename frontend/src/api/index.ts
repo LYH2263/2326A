@@ -154,6 +154,29 @@ export const feedingApi = {
   delete: (id: number) => api.delete(`/feeding-records/${id}`),
 };
 
+// ========== 饲养计划 API ==========
+export const feedingPlanApi = {
+  getList: (params?: any) => api.get('/feeding-plans', { params }),
+  getDetail: (id: number) => api.get(`/feeding-plans/${id}`),
+  create: (data: any) => api.post('/feeding-plans', data),
+  update: (id: number, data: any) => api.patch(`/feeding-plans/${id}`, data),
+  delete: (id: number) => api.delete(`/feeding-plans/${id}`),
+  getPlansByDateRange: (startDate: string, endDate: string, params?: any) =>
+    api.get('/feeding-plans/date-range', { params: { startDate, endDate, ...params } }),
+  generateTasks: (date?: string) => api.post('/feeding-plans/generate-tasks', null, { params: { date } }),
+  getTasksByDateRange: (startDate: string, endDate: string, params?: any) =>
+    api.get('/feeding-plans/tasks/date-range', { params: { startDate, endDate, ...params } }),
+  getTask: (id: number) => api.get(`/feeding-plans/tasks/${id}`),
+  updateTask: (id: number, data: any) => api.patch(`/feeding-plans/tasks/${id}`, data),
+  deleteTask: (id: number) => api.delete(`/feeding-plans/tasks/${id}`),
+  completeTask: (id: number, data: any) => api.patch(`/feeding-plans/tasks/${id}/complete`, data),
+  cancelTask: (id: number, notes?: string) =>
+    api.patch(`/feeding-plans/tasks/${id}/cancel`, { notes }),
+  getFeeders: () => api.get('/feeding-plans/feeders/list'),
+  getFoodTypes: () => api.get('/feeding-plans/food-types/list'),
+  getDailyStats: (date: string) => api.get('/feeding-plans/daily-stats', { params: { date } }),
+};
+
 // ========== 统计 API ==========
 export const statisticsApi = {
   getOverview: () => api.get('/statistics/overview'),

@@ -460,3 +460,91 @@ INSERT INTO `breeding_records` (`male_id`, `female_id`, `pairing_date`, `actual_
 (6, 7, '2025-04-10', '2025-06-01', 10, 8, 5, 3, 'weaned', 'SD大鼠繁殖，生长良好', '王饲养员'),
 (11, 12, '2025-06-15', '2025-08-10', 4, 3, 2, 1, 'weaned', '豚鼠繁殖，其中1只死亡', '李饲养员'),
 (9, 10, '2026-01-10', NULL, NULL, NULL, NULL, NULL, 'pairing', '新西兰白兔配对中，观察受孕情况', '赵饲养员');
+
+-- ========================================
+-- 饲养计划表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `feeding_plans` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `plan_name` VARCHAR(200) NOT NULL COMMENT '计划名称',
+  `target_type` ENUM('animal', 'cage') NOT NULL DEFAULT 'animal' COMMENT '目标类型',
+  `animal_id` INT DEFAULT NULL COMMENT '动物ID',
+  `cage_number` VARCHAR(50) DEFAULT NULL COMMENT '笼号',
+  `food_type` VARCHAR(100) NOT NULL COMMENT '饲料类型',
+  `quantity` DECIMAL(10, 2) DEFAULT NULL COMMENT '计划喂养量',
+  `unit` VARCHAR(20) DEFAULT 'g' COMMENT '单位',
+  `water_ml` DECIMAL(10, 2) DEFAULT NULL COMMENT '饮水量(ml)',
+  `feed_time` TIME NOT NULL COMMENT '计划喂养时间',
+  `repeat_type` ENUM('daily', 'weekly', 'cron') NOT NULL DEFAULT 'daily' COMMENT '重复类型',
+  `repeat_days` VARCHAR(50) DEFAULT NULL COMMENT '每周重复日(1-7,逗号分隔,1=周一)',
+  `cron_expression` VARCHAR(100) DEFAULT NULL COMMENT 'Cron表达式',
+  `feeder` VARCHAR(100) DEFAULT NULL COMMENT '负责人',
+  `start_date` DATE NOT NULL COMMENT '有效期开始日期',
+  `end_date` DATE DEFAULT NULL COMMENT '有效期结束日期',
+  `status` ENUM('active', 'paused', 'expired') NOT NULL DEFAULT 'active' COMMENT '状态',
+  `notes` TEXT COMMENT '备注',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE SET NULL,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_cage_number` (`cage_number`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_start_date` (`start_date`),
+  INDEX `idx_end_date` (`end_date`),
+  INDEX `idx_repeat_type` (`repeat_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='饲养计划表';
+
+-- ========================================
+-- 饲养任务表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `feeding_tasks` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `plan_id` INT DEFAULT NULL COMMENT '关联计划ID',
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `task_date` DATE NOT NULL COMMENT '任务日期',
+  `task_time` TIME NOT NULL COMMENT '计划喂养时间',
+  `food_type` VARCHAR(100) NOT NULL COMMENT '饲料类型',
+  `quantity` DECIMAL(10, 2) DEFAULT NULL COMMENT '计划喂养量',
+  `unit` VARCHAR(20) DEFAULT 'g' COMMENT '单位',
+  `water_ml` DECIMAL(10, 2) DEFAULT NULL COMMENT '饮水量(ml)',
+  `feeder` VARCHAR(100) DEFAULT NULL COMMENT '负责人',
+  `status` ENUM('pending', 'completed', 'missed', 'cancelled') NOT NULL DEFAULT 'pending' COMMENT '状态',
+  `feeding_record_id` INT DEFAULT NULL COMMENT '关联饲养记录ID',
+  `completed_at` DATETIME DEFAULT NULL COMMENT '完成时间',
+  `notes` TEXT COMMENT '备注',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`plan_id`) REFERENCES `feeding_plans`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`feeding_record_id`) REFERENCES `feeding_records`(`id`) ON DELETE SET NULL,
+  INDEX `idx_plan_id` (`plan_id`),
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_task_date` (`task_date`),
+  INDEX `idx_status` (`status`),
+  INDEX `idx_feeding_record_id` (`feeding_record_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='饲养任务表';
+
+-- ========================================
+-- 种子数据：饲养计划
+-- ========================================
+INSERT INTO `feeding_plans` (`plan_name`, `target_type`, `animal_id`, `food_type`, `quantity`, `unit`, `water_ml`, `feed_time`, `repeat_type`, `repeat_days`, `feeder`, `start_date`, `end_date`, `status`, `notes`) VALUES
+('小鼠A-101笼每日早餐', 'cage', NULL, '标准啮齿类动物饲料', 5.00, 'g', 8.00, '08:00:00', 'daily', NULL, '小李', '2026-01-01', '2026-12-31', 'active', 'A-101笼小鼠每日早餐'),
+('小鼠A-101笼每日晚餐', 'cage', NULL, '标准啮齿类动物饲料', 5.00, 'g', 7.50, '17:00:00', 'daily', NULL, '小王', '2026-01-01', '2026-12-31', 'active', 'A-101笼小鼠每日晚餐'),
+('大鼠B-201笼每日喂养', 'cage', NULL, '标准大鼠饲料', 25.00, 'g', 35.00, '08:30:00', 'daily', NULL, '小张', '2026-01-01', '2026-12-31', 'active', 'B-201笼大鼠每日喂养'),
+('实验动物M-003高脂饲料', 'animal', 3, '实验专用饲料-高脂', 6.00, 'g', 8.50, '09:00:00', 'daily', NULL, '小李', '2026-01-01', '2026-03-01', 'active', '实验期间特殊饮食'),
+('豚鼠周末维C补充', 'cage', NULL, '豚鼠专用饲料+维C蔬菜', 35.00, 'g', 50.00, '10:00:00', 'weekly', '6,7', '小李', '2026-01-01', '2026-12-31', 'active', '周末额外补充维C蔬菜');
+
+-- ========================================
+-- 种子数据：饲养任务（未来几天）
+-- ========================================
+INSERT INTO `feeding_tasks` (`plan_id`, `animal_id`, `task_date`, `task_time`, `food_type`, `quantity`, `unit`, `water_ml`, `feeder`, `status`, `notes`) VALUES
+(1, 1, '2026-06-08', '08:00:00', '标准啮齿类动物饲料', 5.00, 'g', 8.00, '小李', 'pending', ''),
+(1, 2, '2026-06-08', '08:00:00', '标准啮齿类动物饲料', 5.00, 'g', 8.00, '小李', 'pending', ''),
+(2, 1, '2026-06-08', '17:00:00', '标准啮齿类动物饲料', 5.00, 'g', 7.50, '小王', 'pending', ''),
+(2, 2, '2026-06-08', '17:00:00', '标准啮齿类动物饲料', 5.00, 'g', 7.50, '小王', 'pending', ''),
+(3, 6, '2026-06-08', '08:30:00', '标准大鼠饲料', 25.00, 'g', 35.00, '小张', 'pending', ''),
+(3, 7, '2026-06-08', '08:30:00', '标准大鼠饲料', 25.00, 'g', 35.00, '小张', 'pending', ''),
+(4, 3, '2026-06-08', '09:00:00', '实验专用饲料-高脂', 6.00, 'g', 8.50, '小李', 'pending', '实验期间特殊饮食'),
+(1, 1, '2026-06-09', '08:00:00', '标准啮齿类动物饲料', 5.00, 'g', 8.00, '小李', 'pending', ''),
+(1, 2, '2026-06-09', '08:00:00', '标准啮齿类动物饲料', 5.00, 'g', 8.00, '小李', 'pending', ''),
+(3, 6, '2026-06-09', '08:30:00', '标准大鼠饲料', 25.00, 'g', 35.00, '小张', 'pending', '');

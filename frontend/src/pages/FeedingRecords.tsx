@@ -2,12 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Space, Select, Modal, Form,
   InputNumber, DatePicker, TimePicker, Input, message, Popconfirm, Tooltip, Typography,
+  Tag, Empty,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, CoffeeOutlined,
+  FileSearchOutlined, UserOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { feedingApi, animalApi } from '../api';
+import { feedingApi, animalApi, feedingPlanApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -24,6 +26,10 @@ const FeedingRecords: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const [form] = Form.useForm();
+
+  const [planSelectVisible, setPlanSelectVisible] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -49,6 +55,18 @@ const FeedingRecords: React.FC = () => {
     }
   };
 
+  const fetchPlans = async () => {
+    try {
+      setPlansLoading(true);
+      const res: any = await feedingPlanApi.getList({ page: 1, pageSize: 100, status: 'active' });
+      setPlans(res?.list || []);
+    } catch {
+      // handled
+    } finally {
+      setPlansLoading(false);
+    }
+  };
+
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchAnimals(); }, []);
 
@@ -56,6 +74,34 @@ const FeedingRecords: React.FC = () => {
     setEditingRecord(null);
     form.resetFields();
     form.setFieldsValue({ unit: 'g' });
+    setModalVisible(true);
+  };
+
+  const handleCreateFromPlan = () => {
+    fetchPlans();
+    setPlanSelectVisible(true);
+  };
+
+  const handleSelectPlan = (plan: any) => {
+    setEditingRecord(null);
+    form.resetFields();
+
+    const initialValues: any = {
+      foodType: plan.foodType,
+      quantity: plan.quantity,
+      unit: plan.unit || 'g',
+      waterMl: plan.waterMl,
+      feeder: plan.feeder,
+      feedDate: dayjs(),
+      notes: plan.notes ? `来自计划：${plan.planName}\n${plan.notes}` : `来自计划：${plan.planName}`,
+    };
+
+    if (plan.targetType === 'animal' && plan.animalId) {
+      initialValues.animalId = plan.animalId;
+    }
+
+    form.setFieldsValue(initialValues);
+    setPlanSelectVisible(false);
     setModalVisible(true);
   };
 
@@ -172,9 +218,14 @@ const FeedingRecords: React.FC = () => {
           </Space>
         }
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            添加记录
-          </Button>
+          <Space>
+            <Button icon={<FileSearchOutlined />} onClick={handleCreateFromPlan}>
+              从计划创建
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              添加记录
+            </Button>
+          </Space>
         }
       >
         <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -261,6 +312,88 @@ const FeedingRecords: React.FC = () => {
             <TextArea rows={2} placeholder="其他备注" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="从饲养计划创建记录"
+        open={planSelectVisible}
+        onCancel={() => setPlanSelectVisible(false)}
+        footer={null}
+        width={720}
+        destroyOnClose
+      >
+        <div style={{ marginTop: 16 }}>
+          {plans.length === 0 && !plansLoading ? (
+            <Empty description="暂无可用的饲养计划" />
+          ) : (
+            <div
+              style={{
+                maxHeight: 500,
+                overflow: 'auto',
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+              }}
+            >
+              {plans.map((plan) => (
+                <div
+                  key={plan.id}
+                  style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid #f0f0f0',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  onClick={() => handleSelectPlan(plan)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f5f5')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+                >
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Space>
+                      <Text strong style={{ fontSize: 15 }}>{plan.planName}</Text>
+                      <Tag color={plan.status === 'active' ? 'green' : 'default'}>
+                        {plan.status === 'active' ? '启用中' : plan.status}
+                      </Tag>
+                      <Tag color="blue">
+                        {plan.targetType === 'animal' ? '指定动物' : '指定笼位'}
+                      </Tag>
+                    </Space>
+                    <Space wrap>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        <CoffeeOutlined style={{ marginRight: 4 }} />
+                        {plan.foodType}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        {plan.quantity ? `${plan.quantity}${plan.unit || 'g'}` : ''}
+                        {plan.waterMl ? ` / ${plan.waterMl}ml水` : ''}
+                      </Text>
+                      {plan.feeder && (
+                        <Text type="secondary" style={{ fontSize: 13 }}>
+                          <UserOutlined style={{ marginRight: 4 }} />
+                          {plan.feeder}
+                        </Text>
+                      )}
+                    </Space>
+                    {plan.targetType === 'animal' && plan.animal && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        动物：{plan.animal?.name} ({plan.animal?.species})
+                      </Text>
+                    )}
+                    {plan.targetType === 'cage' && plan.cageNumber && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        笼位：{plan.cageNumber}
+                      </Text>
+                    )}
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      重复：{plan.repeatType === 'daily' ? '每日' : plan.repeatType === 'weekly' ? `每周${plan.repeatDays}` : plan.cronExpression}
+                      {' · '}
+                      时间：{plan.feedTime}
+                    </Text>
+                  </Space>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );

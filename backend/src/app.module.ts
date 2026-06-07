@@ -9,6 +9,7 @@ import { FeedingModule } from './feeding/feeding.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { CheckupSchedulesModule } from './checkup-schedules/checkup-schedules.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { FeedingPlansModule } from './feeding-plans/feeding-plans.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AlertsModule } from './alerts/alerts.module';
     StatisticsModule,
     CheckupSchedulesModule,
     AlertsModule,
+    FeedingPlansModule,
   ],
 })
 export class AppModule {}

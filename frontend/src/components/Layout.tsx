@@ -16,6 +16,7 @@ import {
   LineChartOutlined,
   CalendarOutlined,
   SmileOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons';
 import NotificationCenter from './NotificationCenter';
 
@@ -30,6 +31,7 @@ const menuItems = [
   { key: '/checkup-schedules', icon: <CalendarOutlined />, label: '体检排班' },
   { key: '/experiments', icon: <ExperimentOutlined />, label: '实验项目' },
   { key: '/feeding', icon: <CoffeeOutlined />, label: '饲养记录' },
+  { key: '/feeding-plans', icon: <ScheduleOutlined />, label: '饲养计划' },
   { key: '/breeding-records', icon: <SmileOutlined />, label: '繁殖记录' },
   { key: '/statistics', icon: <BarChartOutlined />, label: '数据统计' },
 ];
