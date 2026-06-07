@@ -713,22 +713,32 @@ export class AnimalsService {
     approvalStatus?: string;
     animalId?: number;
     applicant?: string;
+    keyword?: string;
   }): Promise<{ list: StatusChangeRequest[]; total: number }> {
-    const { page = 1, pageSize = 10, approvalStatus, animalId, applicant } = query;
-    const where: any = {};
+    const { page = 1, pageSize = 10, approvalStatus, animalId, applicant, keyword } = query;
+    const qb = this.statusChangeRequestRepository.createQueryBuilder('req');
+    qb.leftJoinAndSelect('req.animal', 'animal');
 
-    if (approvalStatus) where.approvalStatus = approvalStatus;
-    if (animalId) where.animalId = animalId;
-    if (applicant) where.applicant = applicant;
+    if (approvalStatus) {
+      qb.andWhere('req.approvalStatus = :approvalStatus', { approvalStatus });
+    }
+    if (animalId) {
+      qb.andWhere('req.animalId = :animalId', { animalId });
+    }
+    if (applicant) {
+      qb.andWhere('req.applicant LIKE :applicant', { applicant: `%${applicant}%` });
+    }
+    if (keyword) {
+      qb.andWhere('(animal.name LIKE :keyword OR animal.species LIKE :keyword OR req.applicant LIKE :keyword)', {
+        keyword: `%${keyword}%`,
+      });
+    }
 
-    const [list, total] = await this.statusChangeRequestRepository.findAndCount({
-      where,
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      relations: ['animal'],
-    });
+    qb.orderBy('req.createdAt', 'DESC');
+    qb.skip((page - 1) * pageSize);
+    qb.take(pageSize);
 
+    const [list, total] = await qb.getManyAndCount();
     return { list, total };
   }
 

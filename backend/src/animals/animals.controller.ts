@@ -78,6 +78,65 @@ export class AnimalsController {
     return this.animalsService.getSpeciesList();
   }
 
+  @Post('status-change-requests')
+  @ApiOperation({ summary: '提交状态变更申请' })
+  async createStatusChangeRequest(
+    @Body() dto: CreateStatusChangeRequestDto,
+    @Headers('authorization') auth?: string,
+  ) {
+    const operator = await this.getOperatorFromToken(auth);
+    const applicant = operator || '匿名用户';
+    return this.animalsService.createStatusChangeRequest(dto, applicant);
+  }
+
+  @Get('status-change-requests')
+  @ApiOperation({ summary: '查询状态变更申请列表' })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
+  @ApiQuery({ name: 'approvalStatus', required: false })
+  @ApiQuery({ name: 'animalId', required: false })
+  @ApiQuery({ name: 'applicant', required: false })
+  @ApiQuery({ name: 'keyword', required: false })
+  getStatusChangeRequests(
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+    @Query('approvalStatus') approvalStatus?: string,
+    @Query('animalId') animalId?: number,
+    @Query('applicant') applicant?: string,
+    @Query('keyword') keyword?: string,
+  ) {
+    return this.animalsService.getStatusChangeRequests({
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      approvalStatus,
+      animalId: animalId ? Number(animalId) : undefined,
+      applicant,
+      keyword,
+    });
+  }
+
+  @Get('status-change-requests/:id')
+  @ApiOperation({ summary: '获取状态变更申请详情' })
+  getStatusChangeRequest(@Param('id', ParseIntPipe) id: number) {
+    return this.animalsService.getStatusChangeRequest(id);
+  }
+
+  @Patch('status-change-requests/:id/approve')
+  @ApiOperation({ summary: '审批状态变更申请（通过/拒绝）' })
+  async approveStatusChangeRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ApproveStatusChangeRequestDto,
+    @Headers('authorization') auth?: string,
+  ) {
+    if (!auth || !auth.startsWith('Bearer ')) {
+      throw new UnauthorizedException('请先登录');
+    }
+    const token = auth.replace('Bearer ', '');
+    const user = await this.authService.getProfile(token);
+    const approver = user.name || user.username;
+    return this.animalsService.approveStatusChangeRequest(id, dto, approver, user.role);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '获取动物详情' })
   findOne(@Param('id', ParseIntPipe) id: number) {
@@ -214,62 +273,6 @@ export class AnimalsController {
   ) {
     const gen = generations ? Number(generations) : 3;
     return this.animalsService.getFullPedigree(id, gen);
-  }
-
-  @Post('status-change-requests')
-  @ApiOperation({ summary: '提交状态变更申请' })
-  async createStatusChangeRequest(
-    @Body() dto: CreateStatusChangeRequestDto,
-    @Headers('authorization') auth?: string,
-  ) {
-    const operator = await this.getOperatorFromToken(auth);
-    const applicant = operator || '匿名用户';
-    return this.animalsService.createStatusChangeRequest(dto, applicant);
-  }
-
-  @Get('status-change-requests')
-  @ApiOperation({ summary: '查询状态变更申请列表' })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'pageSize', required: false })
-  @ApiQuery({ name: 'approvalStatus', required: false })
-  @ApiQuery({ name: 'animalId', required: false })
-  @ApiQuery({ name: 'applicant', required: false })
-  getStatusChangeRequests(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('approvalStatus') approvalStatus?: string,
-    @Query('animalId') animalId?: number,
-    @Query('applicant') applicant?: string,
-  ) {
-    return this.animalsService.getStatusChangeRequests({
-      page: page ? Number(page) : undefined,
-      pageSize: pageSize ? Number(pageSize) : undefined,
-      approvalStatus,
-      animalId: animalId ? Number(animalId) : undefined,
-      applicant,
-    });
-  }
-
-  @Get('status-change-requests/:id')
-  @ApiOperation({ summary: '获取状态变更申请详情' })
-  getStatusChangeRequest(@Param('id', ParseIntPipe) id: number) {
-    return this.animalsService.getStatusChangeRequest(id);
-  }
-
-  @Patch('status-change-requests/:id/approve')
-  @ApiOperation({ summary: '审批状态变更申请（通过/拒绝）' })
-  async approveStatusChangeRequest(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ApproveStatusChangeRequestDto,
-    @Headers('authorization') auth?: string,
-  ) {
-    if (!auth || !auth.startsWith('Bearer ')) {
-      throw new UnauthorizedException('请先登录');
-    }
-    const token = auth.replace('Bearer ', '');
-    const user = await this.authService.getProfile(token);
-    const approver = user.name || user.username;
-    return this.animalsService.approveStatusChangeRequest(id, dto, approver, user.role);
   }
 
   @Get(':id/status-change-requests')
