@@ -150,6 +150,71 @@ CREATE TABLE IF NOT EXISTS `experiment_animals` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='实验-动物关联表';
 
 -- ========================================
+-- 实验数据点表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `experiment_data_points` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `experiment_id` INT NOT NULL COMMENT '实验ID',
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `collected_at` DATETIME NOT NULL COMMENT '采集时间',
+  `metric_name` VARCHAR(100) NOT NULL COMMENT '指标名称',
+  `data_type` ENUM('numeric', 'text', 'option') NOT NULL DEFAULT 'numeric' COMMENT '数据类型',
+  `numeric_value` DECIMAL(14, 4) DEFAULT NULL COMMENT '数值型数据',
+  `text_value` TEXT COMMENT '文本型数据',
+  `option_value` VARCHAR(100) DEFAULT NULL COMMENT '选项型数据',
+  `unit` VARCHAR(30) DEFAULT NULL COMMENT '单位',
+  `notes` TEXT COMMENT '备注',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`experiment_id`) REFERENCES `experiments`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_experiment_id` (`experiment_id`),
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_metric_name` (`metric_name`),
+  INDEX `idx_collected_at` (`collected_at`),
+  INDEX `idx_data_type` (`data_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='实验数据点表';
+
+-- ========================================
+-- 种子数据：实验数据点
+-- ========================================
+INSERT INTO `experiment_data_points` (`experiment_id`, `animal_id`, `collected_at`, `metric_name`, `data_type`, `numeric_value`, `text_value`, `option_value`, `unit`, `notes`) VALUES
+(1, 3, '2025-11-05 09:00:00', 'tumor_volume', 'numeric', 52.3000, NULL, NULL, 'mm³', '第1次测量'),
+(1, 4, '2025-11-05 09:10:00', 'tumor_volume', 'numeric', 48.5000, NULL, NULL, 'mm³', '第1次测量'),
+(1, 3, '2025-11-10 09:00:00', 'tumor_volume', 'numeric', 85.6000, NULL, NULL, 'mm³', '第2次测量'),
+(1, 4, '2025-11-10 09:10:00', 'tumor_volume', 'numeric', 92.1000, NULL, NULL, 'mm³', '第2次测量'),
+(1, 3, '2025-11-15 09:00:00', 'tumor_volume', 'numeric', 120.8000, NULL, NULL, 'mm³', '第3次测量'),
+(1, 4, '2025-11-15 09:10:00', 'tumor_volume', 'numeric', 156.3000, NULL, NULL, 'mm³', '第3次测量'),
+(1, 3, '2025-11-20 09:00:00', 'tumor_volume', 'numeric', 165.2000, NULL, NULL, 'mm³', '第4次测量'),
+(1, 4, '2025-11-20 09:10:00', 'tumor_volume', 'numeric', 230.5000, NULL, NULL, 'mm³', '第4次测量'),
+(1, 3, '2025-11-25 09:00:00', 'tumor_volume', 'numeric', 210.7000, NULL, NULL, 'mm³', '第5次测量'),
+(1, 4, '2025-11-25 09:10:00', 'tumor_volume', 'numeric', 310.2000, NULL, NULL, 'mm³', '第5次测量'),
+(1, 3, '2025-12-01 09:00:00', 'tumor_volume', 'numeric', 245.8000, NULL, NULL, 'mm³', '第6次测量'),
+(1, 4, '2025-12-01 09:10:00', 'tumor_volume', 'numeric', 395.6000, NULL, NULL, 'mm³', '第6次测量'),
+(1, 3, '2025-12-05 09:00:00', 'tumor_volume', 'numeric', 260.3000, NULL, NULL, 'mm³', '第7次测量'),
+(1, 4, '2025-12-05 09:10:00', 'tumor_volume', 'numeric', 480.1000, NULL, NULL, 'mm³', '第7次测量'),
+(1, 3, '2025-12-10 09:00:00', 'weight', 'numeric', 22.8000, NULL, NULL, 'g', '体重监测'),
+(1, 4, '2025-12-10 09:10:00', 'weight', 'numeric', 18.5000, NULL, NULL, 'g', '体重监测，体重下降明显'),
+(1, 3, '2025-11-05 09:00:00', 'weight', 'numeric', 24.1000, NULL, NULL, 'g', '初始体重'),
+(1, 4, '2025-11-05 09:10:00', 'weight', 'numeric', 20.1000, NULL, NULL, 'g', '初始体重'),
+(1, 3, '2025-12-10 09:00:00', 'general_condition', 'option', NULL, NULL, '良好', NULL, '整体状态评估'),
+(1, 4, '2025-12-10 09:10:00', 'general_condition', 'option', NULL, NULL, '一般', NULL, '整体状态评估'),
+(2, 6, '2025-10-20 10:00:00', 'ALT', 'numeric', 42.5000, NULL, NULL, 'U/L', '血清丙氨酸氨基转移酶'),
+(2, 6, '2025-11-05 10:00:00', 'ALT', 'numeric', 58.3000, NULL, NULL, 'U/L', '血清丙氨酸氨基转移酶'),
+(2, 6, '2025-11-20 10:00:00', 'ALT', 'numeric', 76.8000, NULL, NULL, 'U/L', '血清丙氨酸氨基转移酶，略有升高'),
+(2, 6, '2025-12-05 10:00:00', 'ALT', 'numeric', 65.2000, NULL, NULL, 'U/L', '血清丙氨酸氨基转移酶'),
+(2, 6, '2025-10-20 10:00:00', 'weight', 'numeric', 325.0000, NULL, NULL, 'g', '初始体重'),
+(2, 6, '2025-11-20 10:00:00', 'weight', 'numeric', 310.5000, NULL, NULL, 'g', '体重监测'),
+(2, 6, '2025-12-05 10:00:00', 'weight', 'numeric', 298.3000, NULL, NULL, 'g', '体重监测'),
+(2, 6, '2025-12-10 14:00:00', 'behavior_note', 'text', NULL, '大鼠活动量减少，被毛蓬松，饮食量减少', NULL, NULL, '行为观察记录'),
+(5, 11, '2025-09-10 10:00:00', 'ear_thickness', 'numeric', 0.2100, NULL, NULL, 'mm', '左耳厚度-给药前'),
+(5, 12, '2025-09-10 10:10:00', 'ear_thickness', 'numeric', 0.2000, NULL, NULL, 'mm', '左耳厚度-给药前'),
+(5, 11, '2025-09-20 10:00:00', 'ear_thickness', 'numeric', 0.6800, NULL, NULL, 'mm', '左耳厚度-激发后24h'),
+(5, 12, '2025-09-20 10:10:00', 'ear_thickness', 'numeric', 0.8500, NULL, NULL, 'mm', '左耳厚度-激发后24h'),
+(5, 11, '2025-10-01 10:00:00', 'ear_thickness', 'numeric', 0.3500, NULL, NULL, 'mm', '左耳厚度-恢复期'),
+(5, 12, '2025-10-01 10:10:00', 'ear_thickness', 'numeric', 0.4200, NULL, NULL, 'mm', '左耳厚度-恢复期');
+
+-- ========================================
 -- 饲养记录表
 -- ========================================
 CREATE TABLE IF NOT EXISTS `feeding_records` (

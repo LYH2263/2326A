@@ -93,6 +93,48 @@ export const experimentApi = {
   removeAnimal: (id: number) => api.delete(`/experiments/animals/${id}`),
 };
 
+// ========== 实验数据点 API ==========
+export const experimentDataPointApi = {
+  getList: (params?: any) => api.get('/experiment-data-points', { params }),
+  getDetail: (id: number) => api.get(`/experiment-data-points/${id}`),
+  create: (data: any) => api.post('/experiment-data-points', data),
+  batchCreate: (data: { points: any[] }) => api.post('/experiment-data-points/batch', data),
+  update: (id: number, data: any) => api.patch(`/experiment-data-points/${id}`, data),
+  delete: (id: number) => api.delete(`/experiment-data-points/${id}`),
+  getMetricNames: (experimentId: number) => api.get('/experiment-data-points/metrics', { params: { experimentId } }),
+  getStatistics: (params: {
+    experimentId: number;
+    metricName: string;
+    groupBy?: 'animal' | 'day' | 'week';
+    startDate?: string;
+    endDate?: string;
+    animalIds?: number[];
+  }) => {
+    const { animalIds, ...rest } = params;
+    return api.get('/experiment-data-points/statistics', {
+      params: {
+        ...rest,
+        animalIds: animalIds ? animalIds.join(',') : undefined,
+      },
+    });
+  },
+  getTimeSeries: (params: {
+    experimentId: number;
+    metricName: string;
+    animalIds?: number[];
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const { animalIds, ...rest } = params;
+    return api.get('/experiment-data-points/time-series', {
+      params: {
+        ...rest,
+        animalIds: animalIds ? animalIds.join(',') : undefined,
+      },
+    });
+  },
+};
+
 // ========== 饲养记录 API ==========
 export const feedingApi = {
   getList: (params?: any) => api.get('/feeding-records', { params }),
