@@ -223,4 +223,28 @@ export const breedingApi = {
   delete: (id: number) => api.delete(`/breeding-records/${id}`),
 };
 
+// ========== 动物档案 API ==========
+export const animalArchiveApi = {
+  getArchive: (id: number) => api.get(`/animal-archives/${id}`),
+  exportWord: (id: number) => {
+    const token = localStorage.getItem('token');
+    return fetch(`/api/animal-archives/${id}/export/word`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+    }).then((res) => res.blob());
+  },
+  batchExportZip: (ids: number[]) => {
+    const token = localStorage.getItem('token');
+    return fetch('/api/animal-archives/batch/export/zip', {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids }),
+    }).then((res) => res.blob());
+  },
+};
+
 export default api;

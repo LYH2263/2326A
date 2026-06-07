@@ -10,6 +10,7 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { CheckupSchedulesModule } from './checkup-schedules/checkup-schedules.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { FeedingPlansModule } from './feeding-plans/feeding-plans.module';
+import { AnimalArchivesModule } from './animal-archives/animal-archives.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { FeedingPlansModule } from './feeding-plans/feeding-plans.module';
     CheckupSchedulesModule,
     AlertsModule,
     FeedingPlansModule,
+    AnimalArchivesModule,
   ],
 })
 export class AppModule {}

@@ -131,3 +131,133 @@ body {
     width: 100%;
   }
 }
+
+/* ========== 动物档案页面样式 ========== */
+.animal-archive-page .archive-section .section-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1890ff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.animal-archive-page .ant-card-head-title {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* ========== 打印样式 ========== */
+@media print {
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print,
+  .ant-layout-sider,
+  .ant-layout-header,
+  .ant-layout-footer,
+  .ant-modal-mask,
+  .ant-modal-wrap,
+  .ant-drawer-mask,
+  .ant-drawer,
+  .ant-notification,
+  .ant-message,
+  .ant-popover,
+  .ant-tooltip,
+  .ant-back-top,
+  .ant-anchor-ink,
+  .ant-affix {
+    display: none !important;
+  }
+
+  .animal-archive-page {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .animal-archive-page .archive-content {
+    padding: 0 !important;
+  }
+
+  .animal-archive-page .ant-card {
+    box-shadow: none !important;
+    border: 1px solid #d9d9d9;
+    border-radius: 0 !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid;
+  }
+
+  .animal-archive-page .ant-card-head {
+    background: #f5f5f5 !important;
+    border-bottom: 2px solid #1890ff;
+  }
+
+  .animal-archive-page .archive-section .section-number {
+    background: #1890ff !important;
+    color: #fff !important;
+  }
+
+  .animal-archive-page .ant-table {
+    font-size: 12px;
+  }
+
+  .animal-archive-page .ant-tag {
+    border: 1px solid #d9d9d9;
+    color: #000 !important;
+    background: #f5f5f5 !important;
+  }
+
+  .animal-archive-page .print-footer {
+    margin-top: 24px;
+    page-break-inside: avoid;
+  }
+
+  .ant-layout-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  .ant-layout {
+    background: #fff !important;
+  }
+
+  /* 分页控制 */
+  .archive-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .archive-section + .archive-section {
+    page-break-before: auto;
+  }
+
+  /* 表格分页处理 */
+  .ant-table {
+    page-break-inside: auto;
+  }
+
+  .ant-table-tbody tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
+.no-screen {
+  display: none;
+}
+
+@media print {
+  .no-screen {
+    display: block;
+  }
+}

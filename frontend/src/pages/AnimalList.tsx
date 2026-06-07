@@ -8,9 +8,10 @@ import {
 import {
   PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined,
   EyeOutlined, ReloadOutlined, SwapOutlined, MergeCellsOutlined,
+  FileZipOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { animalApi } from '../api';
+import { animalApi, animalArchiveApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -977,6 +978,28 @@ const AnimalList: React.FC = () => {
     }
   };
 
+  const handleBatchExportZip = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择动物');
+      return;
+    }
+    try {
+      const blob = await animalArchiveApi.batchExportZip(selectedRowKeys);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = dayjs().format('YYYYMMDD_HHmmss');
+      a.download = `动物档案批量导出_${dateStr}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      message.success('批量导出成功');
+    } catch {
+      message.error('导出失败，请稍后重试');
+    }
+  };
+
   const columns = [
     {
       title: '编号',
@@ -1029,12 +1052,15 @@ const AnimalList: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 200,
       fixed: 'right' as const,
       render: (_: any, record: any) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record.id)} />
+          </Tooltip>
+          <Tooltip title="查看档案">
+            <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => navigate(`/animals/${record.id}/archive`)} />
           </Tooltip>
           <Tooltip title="编辑">
             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
@@ -1410,6 +1436,9 @@ const AnimalList: React.FC = () => {
                 <Button type="primary" icon={<MergeCellsOutlined />} onClick={handleOpenMerge}>
                   合笼 ({selectedRowKeys.length})
                 </Button>
+                <Button icon={<FileZipOutlined />} onClick={handleBatchExportZip}>
+                  导出档案 ({selectedRowKeys.length})
+                </Button>
                 <Divider type="vertical" />
               </>
             )}
@@ -1566,7 +1595,24 @@ const AnimalList: React.FC = () => {
       </Modal>
 
       <Modal
-        title="动物详细信息"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>动物详细信息</span>
+            {detailAnimal && (
+              <Button
+                size="small"
+                type="primary"
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  handleDetailClose();
+                  navigate(`/animals/${detailAnimal.id}/archive`);
+                }}
+              >
+                查看完整档案
+              </Button>
+            )}
+          </div>
+        }
         open={detailVisible}
         onCancel={handleDetailClose}
         footer={null}
