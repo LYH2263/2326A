@@ -33,7 +33,7 @@ export class FeedingPlansService {
       throw new BadRequestException('选择笼位目标类型时必须指定笼号');
     }
 
-    const plan = this.planRepository.create(dto as any);
+    const plan = this.planRepository.create(dto as any) as unknown as FeedingPlan;
     const saved = await this.planRepository.save(plan);
     this.logger.log(`Created feeding plan: ${saved.id} - ${saved.planName}`);
     return saved;
@@ -193,7 +193,7 @@ export class FeedingPlansService {
       notes: dto.notes,
     };
 
-    const record = this.feedingRecordRepository.create(recordData);
+    const record = this.feedingRecordRepository.create(recordData) as unknown as FeedingRecord;
     const savedRecord = await this.feedingRecordRepository.save(record);
 
     task.status = 'completed';

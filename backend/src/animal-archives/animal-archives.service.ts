@@ -20,9 +20,9 @@ import {
   AlignmentType,
   PageBreak,
 } from 'docx';
-import * as archiver from 'archiver';
+import { Archiver, ZipArchive } from 'archiver';
 import { Readable } from 'stream';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 export interface AnimalArchive {
   basicInfo: Animal;
@@ -156,7 +156,7 @@ export class AnimalArchivesService {
       });
     };
 
-    const children: (Paragraph | Table | PageBreak)[] = [];
+    const children: (Paragraph | Table)[] = [];
 
     children.push(
       new Paragraph({
@@ -342,7 +342,9 @@ export class AnimalArchivesService {
     }
 
     children.push(
-      new PageBreak(),
+      new Paragraph({
+        children: [new PageBreak()],
+      }),
     );
 
     children.push(
@@ -495,7 +497,7 @@ export class AnimalArchivesService {
 
   async generateZipArchive(archives: AnimalArchive[]): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const archive = archiver('zip', {
+      const archive = new ZipArchive({
         zlib: { level: 9 },
       });
 

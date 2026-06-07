@@ -27,6 +27,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof exceptionResponse === 'string'
           ? exceptionResponse
           : (exceptionResponse as any).message || exception.message;
+    } else if (exception instanceof Error) {
+      this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
     }
 
     this.logger.error(

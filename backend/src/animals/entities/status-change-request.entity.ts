@@ -32,7 +32,7 @@ export class StatusChangeRequest {
   @Column({ name: 'reason', type: 'text' })
   reason: string;
 
-  @Column({ name: 'approver', length: 100, nullable: true })
+  @Column({ name: 'approver', type: 'varchar', length: 100, nullable: true })
   approver: string | null;
 
   @Column({

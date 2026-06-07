@@ -11,7 +11,7 @@ import {
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AnimalArchivesService } from './animal-archives.service';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 export class BatchExportDto {
   ids: number[];

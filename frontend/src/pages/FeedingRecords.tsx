@@ -13,6 +13,7 @@ import { feedingApi, animalApi, feedingPlanApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Text } = Typography;
 
 const FeedingRecords: React.FC = () => {
   const [loading, setLoading] = useState(false);
