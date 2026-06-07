@@ -37,6 +37,591 @@ const operationTypeMap: Record<string, { label: string; color: string }> = {
   cage_merge: { label: '合笼', color: 'warning' },
 };
 
+const NODE_WIDTH = 140;
+const NODE_HEIGHT = 60;
+const H_GAP = 40;
+const V_GAP = 60;
+
+const getNodeColor = (gender: string, isCurrent: boolean, loopDetected: boolean) => {
+  if (loopDetected) return { fill: '#fff7e6', stroke: '#faad14', textColor: '#fa8c16' };
+  if (isCurrent) return { fill: '#e6f7ff', stroke: '#faad14', textColor: '#1890ff', dash: true };
+  if (gender === 'male') return { fill: '#e6f7ff', stroke: '#1890ff', textColor: '#1890ff' };
+  if (gender === 'female') return { fill: '#fff0f6', stroke: '#eb2f96', textColor: '#eb2f96' };
+  return { fill: '#fafafa', stroke: '#d9d9d9', textColor: '#666' };
+};
+
+const getStatusColor = (status: string) => {
+  const map: Record<string, string> = {
+    healthy: '#52c41a',
+    sick: '#ff4d4f',
+    in_experiment: '#1890ff',
+    deceased: '#8c8c8c',
+    quarantine: '#faad14',
+  };
+  return map[status] || '#d9d9d9';
+};
+
+interface PedigreeNode {
+  id: number;
+  name: string;
+  species: string;
+  gender: string;
+  status: string;
+  breed?: string;
+  cageNumber?: string;
+  father?: PedigreeNode;
+  mother?: PedigreeNode;
+  children?: PedigreeNode[];
+  generation?: number;
+  parentType?: 'father' | 'mother' | 'child';
+  loopDetected?: boolean;
+}
+
+interface PedigreeChartProps {
+  data: any;
+  onNodeClick?: (node: any) => void;
+  currentAnimalId: number;
+}
+
+const PedigreeTreeNode: React.FC<{
+  node: PedigreeNode;
+  x: number;
+  y: number;
+  onClick?: (node: any) => void;
+  currentId: number;
+  parentType?: 'father' | 'mother';
+  isLeft?: boolean;
+}> = ({ node, x, y, onClick, currentId, parentType, isLeft = true }) => {
+  const colors = getNodeColor(node.gender, currentId === node.id, !!node.loopDetected);
+  const statusColor = getStatusColor(node.status);
+  const genderLabel = node.gender === 'male' ? '♂' : node.gender === 'female' ? '♀' : '?';
+
+  return (
+    <g
+      transform={`translate(${x - NODE_WIDTH / 2}, ${y - NODE_HEIGHT / 2})`}
+      style={{ cursor: 'pointer' }}
+      onClick={() => onClick?.(node)}
+    >
+      <rect
+        width={NODE_WIDTH}
+        height={NODE_HEIGHT}
+        rx={8}
+        fill={colors.fill}
+        stroke={colors.stroke}
+        strokeWidth={currentId === node.id ? 3 : 1.5}
+        strokeDasharray={colors.dash ? '6 3' : undefined}
+      />
+      <text x={NODE_WIDTH / 2} y={22} textAnchor="middle" fontSize="13" fontWeight={600} fill={colors.textColor}>
+        {node.name}
+        <tspan fontSize="11" fill="#999" style={{ marginLeft: 4 }}> {genderLabel}</tspan>
+      </text>
+      <text x={NODE_WIDTH / 2} y={40} textAnchor="middle" fontSize="11" fill="#666">
+        {node.species}
+      </text>
+      <circle cx={NODE_WIDTH - 12} cy={12} r={5} fill={statusColor} />
+      {node.loopDetected && (
+        <text x={NODE_WIDTH / 2} y={54} textAnchor="middle" fontSize="10" fill="#faad14">
+          ⚠ 循环引用
+        </text>
+      )}
+    </g>
+  );
+};
+
+const PedigreeTreeChart: React.FC<PedigreeChartProps> = ({ data, onNodeClick, currentAnimalId }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const calculateAncestorLayout = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number } => {
+    const nodes: any[] = [];
+    const links: any[] = [];
+
+    if (!node || depth > maxDepth) return { nodes, links, width: NODE_WIDTH };
+
+    const currentY = (maxDepth - depth) * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT / 2;
+
+    if (!node.father && !node.mother) {
+      nodes.push({
+        ...node,
+        x: NODE_WIDTH / 2,
+        y: currentY,
+      });
+      return { nodes, links, width: NODE_WIDTH };
+    }
+
+    const leftResult = node.father && !node.father.loopDetected
+      ? calculateAncestorLayout(node.father, depth + 1, maxDepth)
+      : { nodes: [], links: [], width: node.father ? NODE_WIDTH : 0 };
+    const rightResult = node.mother && !node.mother.loopDetected
+      ? calculateAncestorLayout(node.mother, depth + 1, maxDepth)
+      : { nodes: [], links: [], width: node.mother ? NODE_WIDTH : 0 };
+
+    const totalWidth = Math.max(
+      NODE_WIDTH,
+      leftResult.width + H_GAP + rightResult.width
+    );
+
+    const leftOffset = (totalWidth - leftResult.width - H_GAP - rightResult.width) / 2;
+
+    const centerX = totalWidth / 2;
+    const fatherX = leftOffset + leftResult.width / 2;
+    const motherX = leftOffset + leftResult.width + H_GAP + rightResult.width / 2;
+
+    nodes.push({
+      ...node,
+      x: centerX,
+      y: currentY,
+    });
+
+    for (const n of leftResult.nodes) {
+      nodes.push({ ...n, x: n.x + leftOffset });
+    }
+    for (const n of rightResult.nodes) {
+      nodes.push({ ...n, x: n.x + leftOffset + leftResult.width + H_GAP });
+    }
+
+    if (node.father) {
+      const fatherNode = leftResult.nodes.length > 0
+        ? leftResult.nodes[leftResult.nodes.length - 1]
+        : { x: fatherX, y: currentY + NODE_HEIGHT + V_GAP };
+      links.push({
+        fromX: centerX,
+        fromY: currentY - NODE_HEIGHT / 2,
+        toX: fatherNode.x || fatherX,
+        toY: currentY + V_GAP - NODE_HEIGHT / 2,
+        type: 'father',
+      });
+    }
+
+    if (node.mother) {
+      const motherNode = rightResult.nodes.length > 0
+        ? rightResult.nodes[rightResult.nodes.length - 1]
+        : { x: motherX, y: currentY + NODE_HEIGHT + V_GAP };
+      links.push({
+        fromX: centerX,
+        fromY: currentY - NODE_HEIGHT / 2,
+        toX: motherNode.x || motherX,
+        toY: currentY + V_GAP - NODE_HEIGHT / 2,
+        type: 'mother',
+      });
+    }
+
+    links.push(...leftResult.links.map(l => ({ ...l, fromX: l.fromX + leftOffset, toX: l.toX + leftOffset })));
+    links.push(...rightResult.links.map(l => ({
+      ...l,
+      fromX: l.fromX + leftOffset + leftResult.width + H_GAP,
+      toX: l.toX + leftOffset + leftResult.width + H_GAP,
+    })));
+
+    return { nodes, links, width: totalWidth };
+  };
+
+  const calculateDescendantLayout = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number } => {
+    const nodes: any[] = [];
+    const links: any[] = [];
+
+    if (!node || depth > maxDepth) return { nodes, links, width: NODE_WIDTH };
+
+    const currentY = depth * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT / 2;
+    const children = node.children || [];
+
+    if (children.length === 0) {
+      nodes.push({ ...node, x: NODE_WIDTH / 2, y: currentY });
+      return { nodes, links, width: NODE_WIDTH };
+    }
+
+    const childResults = children.map(child => calculateDescendantLayout(child, depth + 1, maxDepth));
+    const totalChildrenWidth = childResults.reduce((sum, r, i) => sum + r.width + (i > 0 ? H_GAP : 0), 0);
+    const totalWidth = Math.max(NODE_WIDTH, totalChildrenWidth);
+
+    const childrenStartX = (totalWidth - totalChildrenWidth) / 2;
+    const centerX = totalWidth / 2;
+
+    nodes.push({ ...node, x: centerX, y: currentY });
+
+    let currentX = childrenStartX;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      const result = childResults[i];
+
+      for (const n of result.nodes) {
+        nodes.push({ ...n, x: n.x + currentX });
+      }
+
+      const childCenterX = currentX + result.width / 2;
+      links.push({
+        fromX: centerX,
+        fromY: currentY + NODE_HEIGHT / 2,
+        toX: childCenterX,
+        toY: currentY + V_GAP + NODE_HEIGHT / 2,
+        type: child.parentType || 'child',
+      });
+
+      for (const l of result.links) {
+        links.push({ ...l, fromX: l.fromX + currentX, toX: l.toX + currentX });
+      }
+
+      currentX += result.width + H_GAP;
+    }
+
+    return { nodes, links, width: totalWidth };
+  };
+
+  const { ancestors, descendants, generations } = data;
+
+  const ancestorLayout = ancestors
+    ? calculateAncestorLayout(ancestors, 0, generations)
+    : { nodes: [], links: [], width: 0 };
+
+  const rootNode = descendants && descendants.length > 0
+    ? { ...ancestors, children: descendants }
+    : ancestors;
+
+  const descendantLayout = descendants && descendants.length > 0
+    ? calculateDescendantLayout({ ...ancestors, children: descendants } as PedigreeNode, 0, generations)
+    : { nodes: [], links: [], width: 0 };
+
+  const allNodes = [
+    ...ancestorLayout.nodes,
+    ...descendantLayout.nodes.filter((n: any) => n.id !== ancestors?.id),
+  ];
+
+  const allLinks = [
+    ...ancestorLayout.links,
+    ...descendantLayout.links,
+  ];
+
+  const svgWidth = Math.max(ancestorLayout.width, descendantLayout.width, 400) + 80;
+  const ancestorHeight = generations * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT;
+  const svgHeight = ancestorHeight + generations * (NODE_HEIGHT + V_GAP) + 100;
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(s => Math.max(0.3, Math.min(3, s * delta)));
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      setOffset({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const resetView = () => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 8 }}>
+        <Button size="small" onClick={() => setScale(s => Math.min(3, s * 1.2))}>+</Button>
+        <Button size="small" onClick={() => setScale(s => Math.max(0.3, s * 0.8))}>-</Button>
+        <Button size="small" onClick={resetView}>重置</Button>
+      </div>
+      <div
+        style={{
+          width: '100%',
+          height: 500,
+          overflow: 'hidden',
+          border: '1px solid #e8e8e8',
+          borderRadius: 8,
+          background: '#fafafa',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <svg
+          ref={svgRef}
+          width={svgWidth}
+          height={svgHeight}
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <g transform="translate(40, 20)">
+            {allLinks.map((link: any, i: number) => {
+              const color = link.type === 'father' ? '#1890ff' : '#eb2f96';
+              const midY = (link.fromY + link.toY) / 2;
+              return (
+                <g key={i}>
+                  <path
+                    d={`M ${link.fromX} ${link.fromY} C ${link.fromX} ${midY}, ${link.toX} ${midY}, ${link.toX} ${link.toY}`}
+                    stroke={color}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeOpacity={0.6}
+                  />
+                </g>
+              );
+            })}
+            {allNodes.map((node: any) => (
+              <PedigreeTreeNode
+                key={node.id}
+                node={node}
+                x={node.x}
+                y={node.y}
+                onClick={onNodeClick}
+                currentId={currentAnimalId}
+              />
+            ))}
+          </g>
+        </svg>
+      </div>
+      <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: '#999' }}>
+        滚轮缩放 · 拖拽平移 · 共 {allNodes.length} 个节点 · {allLinks.length} 条连线
+      </div>
+    </div>
+  );
+};
+
+const PedigreeForceChart: React.FC<PedigreeChartProps> = ({ data, onNodeClick, currentAnimalId }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [links, setLinks] = useState<any[]>([]);
+  const [isSimulating, setIsSimulating] = useState(true);
+
+  const width = 700;
+  const height = 500;
+
+  useEffect(() => {
+    const nodeMap = new Map<number, any>();
+    const linkList: any[] = [];
+
+    const collectFromAncestors = (node: PedigreeNode | undefined) => {
+      if (!node) return;
+      if (!nodeMap.has(node.id)) {
+        nodeMap.set(node.id, { ...node });
+      }
+      if (node.father) {
+        linkList.push({ source: node.id, target: node.father.id, type: 'father' });
+        if (!node.father.loopDetected) {
+          collectFromAncestors(node.father);
+        }
+      }
+      if (node.mother) {
+        linkList.push({ source: node.id, target: node.mother.id, type: 'mother' });
+        if (!node.mother.loopDetected) {
+          collectFromAncestors(node.mother);
+        }
+      }
+    };
+
+    const collectFromDescendants = (node: PedigreeNode | undefined) => {
+      if (!node || !node.children) return;
+      for (const child of node.children) {
+        if (!nodeMap.has(child.id)) {
+          nodeMap.set(child.id, { ...child });
+        }
+        linkList.push({ source: node.id, target: child.id, type: child.parentType || 'child' });
+        if (!child.loopDetected) {
+          collectFromDescendants(child);
+        }
+      }
+    };
+
+    if (data.ancestors) {
+      collectFromAncestors(data.ancestors);
+    }
+    if (data.descendants && data.ancestors) {
+      collectFromDescendants({ ...data.ancestors, children: data.descendants } as PedigreeNode);
+    }
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const nodeArray = Array.from(nodeMap.values()).map((n, i) => ({
+      ...n,
+      x: centerX + (Math.random() - 0.5) * 200,
+      y: centerY + (Math.random() - 0.5) * 200,
+      vx: 0,
+      vy: 0,
+    }));
+
+    setNodes(nodeArray);
+    setLinks(linkList);
+  }, [data]);
+
+  useEffect(() => {
+    if (nodes.length === 0 || !isSimulating) return;
+
+    let animationId: number;
+    let iterations = 0;
+    const maxIterations = 300;
+
+    const simulate = () => {
+      const nodeList = [...nodes];
+      const k = Math.sqrt((width * height) / nodeList.length) * 0.8;
+
+      for (let i = 0; i < nodeList.length; i++) {
+        for (let j = i + 1; j < nodeList.length; j++) {
+          const dx = nodeList[j].x - nodeList[i].x;
+          const dy = nodeList[j].y - nodeList[i].y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = (k * k) / dist;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          nodeList[i].vx -= fx;
+          nodeList[i].vy -= fy;
+          nodeList[j].vx += fx;
+          nodeList[j].vy += fy;
+        }
+      }
+
+      for (const link of links) {
+        const source = nodeList.find(n => n.id === link.source);
+        const target = nodeList.find(n => n.id === link.target);
+        if (!source || !target) continue;
+
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = (dist - 120) * 0.05;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        source.vx += fx;
+        source.vy += fy;
+        target.vx -= fx;
+        target.vy -= fy;
+      }
+
+      const centerX = width / 2;
+      const centerY = height / 2;
+      for (const node of nodeList) {
+        node.vx += (centerX - node.x) * 0.005;
+        node.vy += (centerY - node.y) * 0.005;
+      }
+
+      for (const node of nodeList) {
+        node.vx *= 0.9;
+        node.vy *= 0.9;
+        node.x += node.vx;
+        node.y += node.vy;
+        node.x = Math.max(50, Math.min(width - 50, node.x));
+        node.y = Math.max(50, Math.min(height - 50, node.y));
+      }
+
+      setNodes(nodeList);
+      iterations++;
+
+      if (iterations < maxIterations) {
+        animationId = requestAnimationFrame(simulate);
+      } else {
+        setIsSimulating(false);
+      }
+    };
+
+    animationId = requestAnimationFrame(simulate);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [nodes.length, links, isSimulating]);
+
+  const restartSimulation = () => {
+    setIsSimulating(true);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+        <Button size="small" onClick={restartSimulation} disabled={isSimulating}>
+          {isSimulating ? '模拟中...' : '重新模拟'}
+        </Button>
+      </div>
+      <div
+        style={{
+          width: '100%',
+          height: 500,
+          overflow: 'hidden',
+          border: '1px solid #e8e8e8',
+          borderRadius: 8,
+          background: '#fafafa',
+        }}
+      >
+        <svg ref={svgRef} width={width} height={height} style={{ display: 'block', margin: '0 auto' }}>
+          {links.map((link: any, i: number) => {
+            const source = nodes.find(n => n.id === link.source);
+            const target = nodes.find(n => n.id === link.target);
+            if (!source || !target) return null;
+            const color = link.type === 'father' ? '#1890ff' : '#eb2f96';
+            return (
+              <line
+                key={i}
+                x1={source.x}
+                y1={source.y}
+                x2={target.x}
+                y2={target.y}
+                stroke={color}
+                strokeWidth={2}
+                strokeOpacity={0.5}
+              />
+            );
+          })}
+          {nodes.map((node: any) => {
+            const colors = getNodeColor(node.gender, currentAnimalId === node.id, !!node.loopDetected);
+            const statusColor = getStatusColor(node.status);
+            const genderLabel = node.gender === 'male' ? '♂' : node.gender === 'female' ? '♀' : '?';
+            return (
+              <g
+                key={node.id}
+                transform={`translate(${node.x}, ${node.y})`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onNodeClick?.(node)}
+              >
+                <rect
+                  x={-NODE_WIDTH / 2}
+                  y={-NODE_HEIGHT / 2}
+                  width={NODE_WIDTH}
+                  height={NODE_HEIGHT}
+                  rx={8}
+                  fill={colors.fill}
+                  stroke={colors.stroke}
+                  strokeWidth={currentAnimalId === node.id ? 3 : 1.5}
+                  strokeDasharray={colors.dash ? '6 3' : undefined}
+                />
+                <text x={0} y={-8} textAnchor="middle" fontSize="13" fontWeight={600} fill={colors.textColor}>
+                  {node.name}
+                  <tspan fontSize="11" fill="#999"> {genderLabel}</tspan>
+                </text>
+                <text x={0} y={12} textAnchor="middle" fontSize="11" fill="#666">
+                  {node.species}
+                </text>
+                <circle cx={NODE_WIDTH / 2 - 12} cy={-NODE_HEIGHT / 2 + 12} r={5} fill={statusColor} />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div style={{ marginTop: 8, textAlign: 'center', fontSize: 12, color: '#999' }}>
+        力导向布局 · 共 {nodes.length} 个节点 · {links.length} 条连线
+      </div>
+    </div>
+  );
+};
+
 const AnimalList: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
@@ -77,6 +662,12 @@ const AnimalList: React.FC = () => {
   const [changeReason, setChangeReason] = useState('');
   const [statusChanged, setStatusChanged] = useState(false);
 
+  const [pedigreeData, setPedigreeData] = useState<any>(null);
+  const [pedigreeLoading, setPedigreeLoading] = useState(false);
+  const [pedigreeGenerations, setPedigreeGenerations] = useState(3);
+  const [pedigreeViewMode, setPedigreeViewMode] = useState<'tree' | 'force'>('tree');
+  const [selectedPedigreeNode, setSelectedPedigreeNode] = useState<any>(null);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const hasOpenedDetailRef = useRef(false);
@@ -109,7 +700,7 @@ const AnimalList: React.FC = () => {
   const fetchCageList = async () => {
     try {
       const res: any = await animalApi.getList({ pageSize: 1000 });
-      const cages = [...new Set((res?.list || []).map((a: any) => a.cageNumber).filter(Boolean))];
+      const cages = [...new Set((res?.list || []).map((a: any) => a.cageNumber).filter(Boolean))] as string[];
       setCageList(cages.sort());
     } catch {
       // handled
@@ -164,9 +755,12 @@ const AnimalList: React.FC = () => {
       setDetailTabKey('basic');
       setTransferLogs([]);
       setStatusChangeLogs([]);
+      setPedigreeData(null);
+      setSelectedPedigreeNode(null);
       setDetailVisible(true);
       fetchTransferLogs(id);
       fetchStatusChangeLogs(id);
+      fetchPedigree(id, pedigreeGenerations);
     } catch {
       // handled
     }
@@ -196,6 +790,18 @@ const AnimalList: React.FC = () => {
       setStatusChangeLogs(Array.isArray(res) ? res : []);
     } catch {
       // handled
+    }
+  };
+
+  const fetchPedigree = async (animalId: number, generations: number = 3) => {
+    try {
+      setPedigreeLoading(true);
+      const res: any = await animalApi.getFullPedigree(animalId, generations);
+      setPedigreeData(res);
+    } catch {
+      // handled
+    } finally {
+      setPedigreeLoading(false);
     }
   };
 
@@ -670,6 +1276,120 @@ const AnimalList: React.FC = () => {
               />
             )}
           </div>
+        </div>
+      ),
+    },
+    {
+      key: 'pedigree',
+      label: '谱系图',
+      children: detailAnimal && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, color: '#666' }}>代数：</span>
+              <Select
+                value={pedigreeGenerations}
+                onChange={(v) => {
+                  setPedigreeGenerations(v);
+                  if (detailAnimal) {
+                    fetchPedigree(detailAnimal.id, v);
+                  }
+                }}
+                style={{ width: 100 }}
+                size="small"
+              >
+                <Option value={1}>1代</Option>
+                <Option value={2}>2代</Option>
+                <Option value={3}>3代</Option>
+                <Option value={4}>4代</Option>
+                <Option value={5}>5代</Option>
+              </Select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, color: '#666' }}>视图：</span>
+              <Select
+                value={pedigreeViewMode}
+                onChange={setPedigreeViewMode}
+                style={{ width: 120 }}
+                size="small"
+              >
+                <Option value="tree">树形图</Option>
+                <Option value="force">力导向图</Option>
+              </Select>
+            </div>
+            <div style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#888' }}>
+              <span>
+                <span style={{ display: 'inline-block', width: 12, height: 2, background: '#1890ff', marginRight: 4, verticalAlign: 'middle' }}></span>
+                父系
+              </span>
+              <span>
+                <span style={{ display: 'inline-block', width: 12, height: 2, background: '#eb2f96', marginRight: 4, verticalAlign: 'middle' }}></span>
+                母系
+              </span>
+              <span>
+                <span style={{ display: 'inline-block', width: 10, height: 10, border: '2px dashed #faad14', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }}></span>
+                当前动物
+              </span>
+            </div>
+          </div>
+
+          {pedigreeLoading ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
+              加载谱系数据中...
+            </div>
+          ) : pedigreeData ? (
+            pedigreeViewMode === 'tree' ? (
+              <PedigreeTreeChart
+                data={pedigreeData}
+                onNodeClick={(node) => setSelectedPedigreeNode(node)}
+                currentAnimalId={detailAnimal.id}
+              />
+            ) : (
+              <PedigreeForceChart
+                data={pedigreeData}
+                onNodeClick={(node) => setSelectedPedigreeNode(node)}
+                currentAnimalId={detailAnimal.id}
+              />
+            )
+          ) : (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
+              暂无谱系数据
+            </div>
+          )}
+
+          {selectedPedigreeNode && (
+            <Card
+              size="small"
+              style={{ marginTop: 16 }}
+              title={<span style={{ fontWeight: 600 }}>选中节点详情</span>}
+              extra={<Button size="small" type="link" onClick={() => setSelectedPedigreeNode(null)}>关闭</Button>}
+            >
+              <Descriptions column={3} size="small">
+                <Descriptions.Item label="编号">{selectedPedigreeNode.name}</Descriptions.Item>
+                <Descriptions.Item label="物种">{selectedPedigreeNode.species}</Descriptions.Item>
+                <Descriptions.Item label="性别">
+                  {genderOptions.find((o: any) => o.value === selectedPedigreeNode.gender)?.label}
+                </Descriptions.Item>
+                <Descriptions.Item label="状态">
+                  <Tag color={statusOptions.find((o: any) => o.value === selectedPedigreeNode.status)?.color}>
+                    {statusOptions.find((o: any) => o.value === selectedPedigreeNode.status)?.label}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="品系">{selectedPedigreeNode.breed || '-'}</Descriptions.Item>
+                <Descriptions.Item label="笼号">{selectedPedigreeNode.cageNumber || '-'}</Descriptions.Item>
+              </Descriptions>
+              {selectedPedigreeNode.loopDetected && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="循环引用检测"
+                  description="该节点在谱系中存在循环引用，已停止递归展开以避免无限循环。"
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </Card>
+          )}
         </div>
       ),
     },

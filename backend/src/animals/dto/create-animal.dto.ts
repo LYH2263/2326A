@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, MaxLength, IsInt } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAnimalDto {
@@ -53,6 +53,16 @@ export class CreateAnimalDto {
   @IsString()
   @MaxLength(200)
   source?: string;
+
+  @ApiPropertyOptional({ description: '父亲动物ID', example: 1 })
+  @IsOptional()
+  @IsInt()
+  fatherId?: number;
+
+  @ApiPropertyOptional({ description: '母亲动物ID', example: 2 })
+  @IsOptional()
+  @IsInt()
+  motherId?: number;
 
   @ApiPropertyOptional({ description: '备注描述' })
   @IsOptional()

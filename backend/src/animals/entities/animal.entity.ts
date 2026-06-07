@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { HealthRecord } from '../../health/entities/health-record.entity';
 import { ExperimentAnimal } from '../../experiments/entities/experiment-animal.entity';
@@ -51,6 +53,26 @@ export class Animal {
 
   @Column({ length: 200, nullable: true })
   source: string;
+
+  @Column({ name: 'father_id', type: 'int', nullable: true })
+  fatherId: number | null;
+
+  @Column({ name: 'mother_id', type: 'int', nullable: true })
+  motherId: number | null;
+
+  @ManyToOne(() => Animal, (animal) => animal.childrenAsFather, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'father_id' })
+  father: Animal;
+
+  @ManyToOne(() => Animal, (animal) => animal.childrenAsMother, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'mother_id' })
+  mother: Animal;
+
+  @OneToMany(() => Animal, (animal) => animal.father)
+  childrenAsFather: Animal[];
+
+  @OneToMany(() => Animal, (animal) => animal.mother)
+  childrenAsMother: Animal[];
 
   @Column({ type: 'text', nullable: true })
   description: string;

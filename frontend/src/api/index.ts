@@ -63,6 +63,16 @@ export const animalApi = {
   getAnimalTransferLogs: (id: number) => api.get(`/animals/${id}/transfer-logs`),
   getStatusFlowRules: () => api.get('/animals/status-flow/rules'),
   getStatusChangeLogs: (id: number) => api.get(`/animals/${id}/status-logs`),
+  setParents: (id: number, data: { fatherId?: number; motherId?: number }) =>
+    api.patch(`/animals/${id}/parents`, data),
+  getParents: (id: number) => api.get(`/animals/${id}/parents`),
+  getChildren: (id: number) => api.get(`/animals/${id}/children`),
+  getAncestorsTree: (id: number, generations?: number) =>
+    api.get(`/animals/${id}/ancestors/tree`, { params: { generations } }),
+  getDescendantsTree: (id: number, generations?: number) =>
+    api.get(`/animals/${id}/descendants/tree`, { params: { generations } }),
+  getFullPedigree: (id: number, generations?: number) =>
+    api.get(`/animals/${id}/pedigree`, { params: { generations } }),
 };
 
 // ========== 健康记录 API ==========
@@ -179,6 +189,15 @@ export const alertApi = {
   markAllAsRead: () => api.patch('/alerts/read-all'),
   markAsResolved: (id: number) => api.patch(`/alerts/${id}/resolve`),
   scanAlerts: () => api.post('/alerts/scan'),
+};
+
+// ========== 繁殖记录 API ==========
+export const breedingApi = {
+  getList: (params?: any) => api.get('/breeding-records', { params }),
+  getDetail: (id: number) => api.get(`/breeding-records/${id}`),
+  create: (data: any) => api.post('/breeding-records', data),
+  update: (id: number, data: any) => api.patch(`/breeding-records/${id}`, data),
+  delete: (id: number) => api.delete(`/breeding-records/${id}`),
 };
 
 export default api;

@@ -34,12 +34,18 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `cage_number` VARCHAR(50) DEFAULT NULL COMMENT '笼号',
   `rfid_tag` VARCHAR(100) DEFAULT NULL COMMENT 'RFID标签',
   `source` VARCHAR(200) DEFAULT NULL COMMENT '来源',
+  `father_id` INT DEFAULT NULL COMMENT '父亲ID',
+  `mother_id` INT DEFAULT NULL COMMENT '母亲ID',
   `description` TEXT COMMENT '备注描述',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_species` (`species`),
   INDEX `idx_status` (`status`),
-  INDEX `idx_cage` (`cage_number`)
+  INDEX `idx_cage` (`cage_number`),
+  INDEX `idx_father_id` (`father_id`),
+  INDEX `idx_mother_id` (`mother_id`),
+  FOREIGN KEY (`father_id`) REFERENCES `animals`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`mother_id`) REFERENCES `animals`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='动物基本信息表';
 
 -- ========================================
@@ -410,3 +416,47 @@ CREATE TABLE IF NOT EXISTS `alerts` (
   INDEX `idx_type` (`type`),
   INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预警通知表';
+
+-- ========================================
+-- 繁殖记录表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `breeding_records` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `male_id` INT NOT NULL COMMENT '雄性动物ID',
+  `female_id` INT NOT NULL COMMENT '雌性动物ID',
+  `pairing_date` DATE NOT NULL COMMENT '配对日期',
+  `expected_birth_date` DATE DEFAULT NULL COMMENT '预计出生日期',
+  `actual_birth_date` DATE DEFAULT NULL COMMENT '实际出生日期',
+  `litter_count` INT DEFAULT NULL COMMENT '产仔数量',
+  `survival_count` INT DEFAULT NULL COMMENT '存活数量',
+  `male_count` INT DEFAULT NULL COMMENT '雄性幼崽数量',
+  `female_count` INT DEFAULT NULL COMMENT '雌性幼崽数量',
+  `status` ENUM('planned', 'pairing', 'pregnant', 'birthed', 'weaned', 'failed') NOT NULL DEFAULT 'planned' COMMENT '繁殖状态',
+  `notes` TEXT COMMENT '备注',
+  `operator` VARCHAR(100) DEFAULT NULL COMMENT '操作人',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`male_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`female_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_male_id` (`male_id`),
+  INDEX `idx_female_id` (`female_id`),
+  INDEX `idx_pairing_date` (`pairing_date`),
+  INDEX `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='繁殖记录表';
+
+-- ========================================
+-- 种子数据：谱系关系（给部分动物设置父母）
+-- ========================================
+UPDATE `animals` SET `father_id` = 1, `mother_id` = 2 WHERE `id` = 3;
+UPDATE `animals` SET `father_id` = 1, `mother_id` = 2 WHERE `id` = 4;
+UPDATE `animals` SET `father_id` = 6, `mother_id` = 7 WHERE `id` = 8;
+UPDATE `animals` SET `father_id` = 11, `mother_id` = 12 WHERE `id` = 5;
+
+-- ========================================
+-- 种子数据：繁殖记录
+-- ========================================
+INSERT INTO `breeding_records` (`male_id`, `female_id`, `pairing_date`, `actual_birth_date`, `litter_count`, `survival_count`, `male_count`, `female_count`, `status`, `notes`, `operator`) VALUES
+(1, 2, '2025-05-20', '2025-07-01', 8, 6, 3, 3, 'weaned', '第一胎繁殖，幼崽健康', '张饲养员'),
+(6, 7, '2025-04-10', '2025-06-01', 10, 8, 5, 3, 'weaned', 'SD大鼠繁殖，生长良好', '王饲养员'),
+(11, 12, '2025-06-15', '2025-08-10', 4, 3, 2, 1, 'weaned', '豚鼠繁殖，其中1只死亡', '李饲养员'),
+(9, 10, '2026-01-10', NULL, NULL, NULL, NULL, NULL, 'pairing', '新西兰白兔配对中，观察受孕情况', '赵饲养员');
