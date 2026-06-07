@@ -49,6 +49,7 @@ const BreedingRecords: React.FC = () => {
       const res: any = await breedingApi.getList({
         page, pageSize,
         status: statusFilter,
+        keyword: keyword || undefined,
       });
       setData(res?.list || []);
       setTotal(res?.total || 0);
@@ -57,7 +58,7 @@ const BreedingRecords: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, statusFilter]);
+  }, [page, pageSize, statusFilter, keyword]);
 
   const fetchAnimals = async () => {
     try {
@@ -73,6 +74,10 @@ const BreedingRecords: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchAnimals(); }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, statusFilter]);
 
   const handleAdd = () => {
     setEditingRecord(null);
@@ -135,14 +140,6 @@ const BreedingRecords: React.FC = () => {
       // validation or api error
     }
   };
-
-  const filteredData = keyword
-    ? data.filter((item: any) =>
-        item.male?.name?.includes(keyword) ||
-        item.female?.name?.includes(keyword) ||
-        item.male?.species?.includes(keyword)
-      )
-    : data;
 
   const columns = [
     {
@@ -286,7 +283,7 @@ const BreedingRecords: React.FC = () => {
 
         <Table
           loading={loading}
-          dataSource={filteredData}
+          dataSource={data}
           columns={columns}
           rowKey="id"
           scroll={{ x: 1100 }}

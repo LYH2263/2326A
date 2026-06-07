@@ -614,8 +614,9 @@ export class AnimalsService {
     animalId?: number;
     startDate?: string;
     endDate?: string;
+    keyword?: string;
   }): Promise<{ list: BreedingRecord[]; total: number }> {
-    const { page = 1, pageSize = 10, status, animalId, startDate, endDate } = query;
+    const { page = 1, pageSize = 10, status, animalId, startDate, endDate, keyword } = query;
     const qb = this.breedingRecordRepository
       .createQueryBuilder('record')
       .leftJoinAndSelect('record.male', 'male')
@@ -635,6 +636,10 @@ export class AnimalsService {
 
     if (endDate) {
       qb.andWhere('record.pairingDate <= :endDate', { endDate });
+    }
+
+    if (keyword) {
+      qb.andWhere('(male.name LIKE :keyword OR female.name LIKE :keyword OR male.species LIKE :keyword OR female.species LIKE :keyword)', { keyword: `%${keyword}%` });
     }
 
     qb.orderBy('record.pairingDate', 'DESC');

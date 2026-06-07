@@ -136,128 +136,120 @@ const PedigreeTreeChart: React.FC<PedigreeChartProps> = ({ data, onNodeClick, cu
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  const calculateAncestorLayout = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number } => {
+  const calculateAncestorTree = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number; rootX: number } => {
     const nodes: any[] = [];
     const links: any[] = [];
 
-    if (!node || depth > maxDepth) return { nodes, links, width: NODE_WIDTH };
+    if (!node || depth > maxDepth) return { nodes, links, width: 0, rootX: 0 };
 
-    const currentY = (maxDepth - depth) * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT / 2;
+    const y = -depth * (NODE_HEIGHT + V_GAP);
 
-    if (!node.father && !node.mother) {
-      nodes.push({
-        ...node,
-        x: NODE_WIDTH / 2,
-        y: currentY,
-      });
-      return { nodes, links, width: NODE_WIDTH };
+    if ((!node.father || node.father.loopDetected) && (!node.mother || node.mother.loopDetected)) {
+      nodes.push({ ...node, x: NODE_WIDTH / 2, y });
+      return { nodes, links, width: NODE_WIDTH, rootX: NODE_WIDTH / 2 };
     }
 
     const leftResult = node.father && !node.father.loopDetected
-      ? calculateAncestorLayout(node.father, depth + 1, maxDepth)
-      : { nodes: [], links: [], width: node.father ? NODE_WIDTH : 0 };
+      ? calculateAncestorTree(node.father, depth + 1, maxDepth)
+      : { nodes: [], links: [], width: node.father ? NODE_WIDTH : 0, rootX: node.father ? NODE_WIDTH / 2 : 0 };
     const rightResult = node.mother && !node.mother.loopDetected
-      ? calculateAncestorLayout(node.mother, depth + 1, maxDepth)
-      : { nodes: [], links: [], width: node.mother ? NODE_WIDTH : 0 };
+      ? calculateAncestorTree(node.mother, depth + 1, maxDepth)
+      : { nodes: [], links: [], width: node.mother ? NODE_WIDTH : 0, rootX: node.mother ? NODE_WIDTH / 2 : 0 };
 
-    const totalWidth = Math.max(
-      NODE_WIDTH,
-      leftResult.width + H_GAP + rightResult.width
-    );
+    const hasLeft = node.father && leftResult.width > 0;
+    const hasRight = node.mother && rightResult.width > 0;
 
-    const leftOffset = (totalWidth - leftResult.width - H_GAP - rightResult.width) / 2;
+    let totalWidth = NODE_WIDTH;
+    if (hasLeft || hasRight) {
+      const childrenWidth = (hasLeft ? leftResult.width : 0) + (hasRight ? rightResult.width : 0) + (hasLeft && hasRight ? H_GAP : 0);
+      totalWidth = Math.max(NODE_WIDTH, childrenWidth);
+    }
 
+    const childrenStartX = (totalWidth - ((hasLeft ? leftResult.width : 0) + (hasRight ? rightResult.width : 0) + (hasLeft && hasRight ? H_GAP : 0))) / 2;
     const centerX = totalWidth / 2;
-    const fatherX = leftOffset + leftResult.width / 2;
-    const motherX = leftOffset + leftResult.width + H_GAP + rightResult.width / 2;
 
-    nodes.push({
-      ...node,
-      x: centerX,
-      y: currentY,
-    });
+    nodes.push({ ...node, x: centerX, y });
 
-    for (const n of leftResult.nodes) {
-      nodes.push({ ...n, x: n.x + leftOffset });
-    }
-    for (const n of rightResult.nodes) {
-      nodes.push({ ...n, x: n.x + leftOffset + leftResult.width + H_GAP });
-    }
-
-    if (node.father) {
-      const fatherNode = leftResult.nodes.length > 0
-        ? leftResult.nodes[leftResult.nodes.length - 1]
-        : { x: fatherX, y: currentY + NODE_HEIGHT + V_GAP };
+    if (hasLeft) {
+      const leftOffset = childrenStartX;
+      for (const n of leftResult.nodes) {
+        nodes.push({ ...n, x: n.x + leftOffset });
+      }
+      const fatherX = leftResult.rootX + leftOffset;
       links.push({
         fromX: centerX,
-        fromY: currentY - NODE_HEIGHT / 2,
-        toX: fatherNode.x || fatherX,
-        toY: currentY + V_GAP - NODE_HEIGHT / 2,
+        fromY: y,
+        toX: fatherX,
+        toY: y - V_GAP,
         type: 'father',
       });
+      for (const l of leftResult.links) {
+        links.push({ ...l, fromX: l.fromX + leftOffset, toX: l.toX + leftOffset });
+      }
     }
 
-    if (node.mother) {
-      const motherNode = rightResult.nodes.length > 0
-        ? rightResult.nodes[rightResult.nodes.length - 1]
-        : { x: motherX, y: currentY + NODE_HEIGHT + V_GAP };
+    if (hasRight) {
+      const rightOffset = childrenStartX + (hasLeft ? leftResult.width + H_GAP : 0);
+      for (const n of rightResult.nodes) {
+        nodes.push({ ...n, x: n.x + rightOffset });
+      }
+      const motherX = rightResult.rootX + rightOffset;
       links.push({
         fromX: centerX,
-        fromY: currentY - NODE_HEIGHT / 2,
-        toX: motherNode.x || motherX,
-        toY: currentY + V_GAP - NODE_HEIGHT / 2,
+        fromY: y,
+        toX: motherX,
+        toY: y - V_GAP,
         type: 'mother',
       });
+      for (const l of rightResult.links) {
+        links.push({ ...l, fromX: l.fromX + rightOffset, toX: l.toX + rightOffset });
+      }
     }
 
-    links.push(...leftResult.links.map(l => ({ ...l, fromX: l.fromX + leftOffset, toX: l.toX + leftOffset })));
-    links.push(...rightResult.links.map(l => ({
-      ...l,
-      fromX: l.fromX + leftOffset + leftResult.width + H_GAP,
-      toX: l.toX + leftOffset + leftResult.width + H_GAP,
-    })));
-
-    return { nodes, links, width: totalWidth };
+    return { nodes, links, width: totalWidth, rootX: centerX };
   };
 
-  const calculateDescendantLayout = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number } => {
+  const calculateDescendantTree = (node: PedigreeNode, depth: number, maxDepth: number): { nodes: any[]; links: any[]; width: number; rootX: number } => {
     const nodes: any[] = [];
     const links: any[] = [];
 
-    if (!node || depth > maxDepth) return { nodes, links, width: NODE_WIDTH };
+    if (!node || depth > maxDepth) return { nodes, links, width: 0, rootX: 0 };
 
-    const currentY = depth * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT / 2;
+    const y = depth * (NODE_HEIGHT + V_GAP);
     const children = node.children || [];
 
-    if (children.length === 0) {
-      nodes.push({ ...node, x: NODE_WIDTH / 2, y: currentY });
-      return { nodes, links, width: NODE_WIDTH };
+    if (children.length === 0 || depth === maxDepth) {
+      nodes.push({ ...node, x: NODE_WIDTH / 2, y });
+      return { nodes, links, width: NODE_WIDTH, rootX: NODE_WIDTH / 2 };
     }
 
-    const childResults = children.map(child => calculateDescendantLayout(child, depth + 1, maxDepth));
+    const childResults = children
+      .filter(child => !child.loopDetected)
+      .map(child => calculateDescendantTree(child, depth + 1, maxDepth));
+
     const totalChildrenWidth = childResults.reduce((sum, r, i) => sum + r.width + (i > 0 ? H_GAP : 0), 0);
     const totalWidth = Math.max(NODE_WIDTH, totalChildrenWidth);
 
     const childrenStartX = (totalWidth - totalChildrenWidth) / 2;
     const centerX = totalWidth / 2;
 
-    nodes.push({ ...node, x: centerX, y: currentY });
+    nodes.push({ ...node, x: centerX, y });
 
     let currentX = childrenStartX;
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
+    for (let i = 0; i < childResults.length; i++) {
       const result = childResults[i];
+      const child = children[i];
 
       for (const n of result.nodes) {
         nodes.push({ ...n, x: n.x + currentX });
       }
 
-      const childCenterX = currentX + result.width / 2;
+      const childCenterX = result.rootX + currentX;
       links.push({
         fromX: centerX,
-        fromY: currentY + NODE_HEIGHT / 2,
+        fromY: y,
         toX: childCenterX,
-        toY: currentY + V_GAP + NODE_HEIGHT / 2,
+        toY: y + V_GAP,
         type: child.parentType || 'child',
       });
 
@@ -268,36 +260,79 @@ const PedigreeTreeChart: React.FC<PedigreeChartProps> = ({ data, onNodeClick, cu
       currentX += result.width + H_GAP;
     }
 
-    return { nodes, links, width: totalWidth };
+    return { nodes, links, width: totalWidth, rootX: centerX };
   };
 
   const { ancestors, descendants, generations } = data;
 
   const ancestorLayout = ancestors
-    ? calculateAncestorLayout(ancestors, 0, generations)
-    : { nodes: [], links: [], width: 0 };
+    ? calculateAncestorTree(ancestors, 0, generations)
+    : { nodes: [], links: [], width: 0, rootX: 0 };
 
-  const rootNode = descendants && descendants.length > 0
+  const descendantRoot = ancestors && descendants && descendants.length > 0
     ? { ...ancestors, children: descendants }
-    : ancestors;
+    : null;
 
-  const descendantLayout = descendants && descendants.length > 0
-    ? calculateDescendantLayout({ ...ancestors, children: descendants } as PedigreeNode, 0, generations)
-    : { nodes: [], links: [], width: 0 };
+  const descendantLayout = descendantRoot
+    ? calculateDescendantTree(descendantRoot as PedigreeNode, 0, generations)
+    : { nodes: [], links: [], width: 0, rootX: 0 };
 
-  const allNodes = [
-    ...ancestorLayout.nodes,
-    ...descendantLayout.nodes.filter((n: any) => n.id !== ancestors?.id),
-  ];
+  const maxWidth = Math.max(ancestorLayout.width, descendantLayout.width, 400);
+  const ancestorYOffset = generations * (NODE_HEIGHT + V_GAP);
+  const totalHeight = generations * (NODE_HEIGHT + V_GAP) * 2 + NODE_HEIGHT;
 
-  const allLinks = [
-    ...ancestorLayout.links,
-    ...descendantLayout.links,
-  ];
+  const ancestorXOffset = (maxWidth - ancestorLayout.width) / 2;
+  const descendantXOffset = (maxWidth - descendantLayout.width) / 2;
 
-  const svgWidth = Math.max(ancestorLayout.width, descendantLayout.width, 400) + 80;
-  const ancestorHeight = generations * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT;
-  const svgHeight = ancestorHeight + generations * (NODE_HEIGHT + V_GAP) + 100;
+  const allNodes: any[] = [];
+  const allLinks: any[] = [];
+
+  const nodeIds = new Set<number>();
+
+  for (const n of ancestorLayout.nodes) {
+    if (!nodeIds.has(n.id)) {
+      nodeIds.add(n.id);
+      allNodes.push({
+        ...n,
+        x: n.x + ancestorXOffset,
+        y: n.y + ancestorYOffset + NODE_HEIGHT / 2,
+      });
+    }
+  }
+
+  for (const n of descendantLayout.nodes) {
+    if (!nodeIds.has(n.id)) {
+      nodeIds.add(n.id);
+      allNodes.push({
+        ...n,
+        x: n.x + descendantXOffset,
+        y: n.y + ancestorYOffset + NODE_HEIGHT / 2,
+      });
+    }
+  }
+
+  for (const l of ancestorLayout.links) {
+    allLinks.push({
+      ...l,
+      fromX: l.fromX + ancestorXOffset,
+      fromY: l.fromY + ancestorYOffset + NODE_HEIGHT / 2,
+      toX: l.toX + ancestorXOffset,
+      toY: l.toY + ancestorYOffset + NODE_HEIGHT / 2,
+    });
+  }
+
+  for (const l of descendantLayout.links) {
+    allLinks.push({
+      ...l,
+      fromX: l.fromX + descendantXOffset,
+      fromY: l.fromY + ancestorYOffset + NODE_HEIGHT / 2,
+      toX: l.toX + descendantXOffset,
+      toY: l.toY + ancestorYOffset + NODE_HEIGHT / 2,
+    });
+  }
+
+  const svgWidth = maxWidth + 80;
+  const svgHeight = totalHeight + 40;
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -463,6 +498,7 @@ const PedigreeForceChart: React.FC<PedigreeChartProps> = ({ data, onNodeClick, c
 
     setNodes(nodeArray);
     setLinks(linkList);
+    setIsSimulating(true);
   }, [data]);
 
   useEffect(() => {
