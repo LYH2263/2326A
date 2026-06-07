@@ -43,7 +43,7 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
-import { checkupScheduleApi, animalApi } from '../api';
+import { checkupScheduleApi, animalApi, healthApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -99,6 +99,10 @@ const CheckupSchedules: React.FC = () => {
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [completingSchedule, setCompletingSchedule] = useState<any>(null);
   const [completeForm] = Form.useForm();
+
+  const [healthDetailVisible, setHealthDetailVisible] = useState(false);
+  const [currentHealthRecord, setCurrentHealthRecord] = useState<any>(null);
+  const [healthDetailLoading, setHealthDetailLoading] = useState(false);
 
   const [batchModalVisible, setBatchModalVisible] = useState(false);
   const [batchStep, setBatchStep] = useState(0);
@@ -172,6 +176,16 @@ const CheckupSchedules: React.FC = () => {
     return schedules.filter((s) => dayjs(s.scheduledDate).format('YYYY-MM-DD') === dateStr);
   }, [schedules]);
 
+  const refreshDaySchedules = useCallback(async (date: Dayjs) => {
+    const dateStr = date.format('YYYY-MM-DD');
+    try {
+      const res: any = await checkupScheduleApi.getByDateRange(dateStr, dateStr);
+      setDaySchedules(res || []);
+    } catch {
+      // handled
+    }
+  }, []);
+
   const dateCellRender = (value: Dayjs) => {
     const dayScheds = getSchedulesByDate(value);
     if (dayScheds.length === 0) return null;
@@ -206,6 +220,7 @@ const CheckupSchedules: React.FC = () => {
     setSelectedDate(value);
     setDaySchedules(getSchedulesByDate(value));
     setDrawerOpen(true);
+    refreshDaySchedules(value);
   };
 
   const handleMonthChange = (value: Dayjs) => {
@@ -240,7 +255,7 @@ const CheckupSchedules: React.FC = () => {
       message.success('删除成功');
       fetchSchedules();
       if (drawerOpen) {
-        setDaySchedules(getSchedulesByDate(selectedDate));
+        refreshDaySchedules(selectedDate);
       }
     } catch {
       // handled
@@ -265,7 +280,7 @@ const CheckupSchedules: React.FC = () => {
       setFormModalVisible(false);
       fetchSchedules();
       if (drawerOpen) {
-        setDaySchedules(getSchedulesByDate(selectedDate));
+        refreshDaySchedules(selectedDate);
       }
     } catch {
       // handled
@@ -297,7 +312,7 @@ const CheckupSchedules: React.FC = () => {
       setCompleteModalVisible(false);
       fetchSchedules();
       if (drawerOpen) {
-        setDaySchedules(getSchedulesByDate(selectedDate));
+        refreshDaySchedules(selectedDate);
       }
     } catch {
       // handled
@@ -310,10 +325,27 @@ const CheckupSchedules: React.FC = () => {
       message.success('已取消排班');
       fetchSchedules();
       if (drawerOpen) {
-        setDaySchedules(getSchedulesByDate(selectedDate));
+        refreshDaySchedules(selectedDate);
       }
     } catch {
       // handled
+    }
+  };
+
+  const handleViewHealthRecord = async (schedule: any) => {
+    if (!schedule.healthRecordId) {
+      message.warning('该排班暂无关联的健康记录');
+      return;
+    }
+    try {
+      setHealthDetailLoading(true);
+      const res: any = await healthApi.getDetail(schedule.healthRecordId);
+      setCurrentHealthRecord(res);
+      setHealthDetailVisible(true);
+    } catch {
+      // handled
+    } finally {
+      setHealthDetailLoading(false);
     }
   };
 
@@ -392,6 +424,23 @@ const CheckupSchedules: React.FC = () => {
   const handleBatchSubmit = async () => {
     try {
       const values = batchForm.getFieldsValue();
+      if (!values.startDate) {
+        message.error('请选择开始日期');
+        return;
+      }
+      if (!values.intervalDays && values.intervalDays !== 0) {
+        message.error('请填写间隔天数');
+        return;
+      }
+      if (!values.times) {
+        message.error('请填写重复次数');
+        return;
+      }
+      if (selectedAnimals.length === 0) {
+        message.error('请选择要排班的动物');
+        return;
+      }
+
       const payload = {
         animalIds: selectedAnimals,
         startDate: values.startDate.format('YYYY-MM-DD'),
@@ -409,10 +458,11 @@ const CheckupSchedules: React.FC = () => {
       setBatchModalVisible(false);
       fetchSchedules();
       if (drawerOpen) {
-        setDaySchedules(getSchedulesByDate(selectedDate));
+        refreshDaySchedules(selectedDate);
       }
-    } catch {
-      // handled
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || '创建失败，请重试';
+      message.error(typeof msg === 'string' ? msg : '创建失败，请重试');
     }
   };
 
@@ -692,9 +742,7 @@ const CheckupSchedules: React.FC = () => {
                           type="text"
                           size="small"
                           icon={<EyeOutlined />}
-                          onClick={() => {
-                            message.info('跳转至健康记录（功能待完善）');
-                          }}
+                          onClick={() => handleViewHealthRecord(item)}
                         />
                       </Tooltip>
                     )}
@@ -932,6 +980,146 @@ const CheckupSchedules: React.FC = () => {
         </Form>
       </Modal>
 
+      {/* 健康记录详情 Modal */}
+      <Modal
+        title="健康记录详情"
+        open={healthDetailVisible}
+        onCancel={() => setHealthDetailVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setHealthDetailVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+        width={640}
+        destroyOnClose
+      >
+        {healthDetailLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>加载中...</div>
+        ) : currentHealthRecord ? (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ padding: '12px 16px', background: '#f5f5f5', borderRadius: 8, marginBottom: 16 }}>
+              <Space direction="vertical" size="small">
+                <Text strong style={{ fontSize: 16 }}>{currentHealthRecord.animal?.name || '动物'}</Text>
+                <Space>
+                  <Tag color="default">{currentHealthRecord.animal?.species}</Tag>
+                  <Tag color="blue">
+                    {currentHealthRecord.condition === 'normal' && '正常'}
+                    {currentHealthRecord.condition === 'abnormal' && '异常'}
+                    {currentHealthRecord.condition === 'critical' && '危急'}
+                  </Tag>
+                  {currentHealthRecord.veterinarian && (
+                    <span style={{ fontSize: 13, color: '#666' }}>
+                      兽医：{currentHealthRecord.veterinarian}
+                    </span>
+                  )}
+                </Space>
+              </Space>
+            </div>
+
+            <Row gutter={16} style={{ marginBottom: 12 }}>
+              <Col span={12}>
+                <Text type="secondary" style={{ fontSize: 12 }}>检查日期</Text>
+                <div style={{ marginTop: 2 }}>
+                  <Text strong>{dayjs(currentHealthRecord.checkDate).format('YYYY-MM-DD')}</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <Text type="secondary" style={{ fontSize: 12 }}>记录编号</Text>
+                <div style={{ marginTop: 2 }}>
+                  <Text strong>#{currentHealthRecord.id}</Text>
+                </div>
+              </Col>
+            </Row>
+
+            <Divider style={{ margin: '12px 0' }} />
+
+            <Title level={5} style={{ marginBottom: 12 }}>体检指标</Title>
+            <Row gutter={16}>
+              <Col span={8}>
+                <div style={{ padding: '12px', background: '#f9f9f9', borderRadius: 6 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>体温</Text>
+                  <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                    {currentHealthRecord.temperature !== null && currentHealthRecord.temperature !== undefined
+                      ? `${currentHealthRecord.temperature} ℃`
+                      : '-'}
+                  </div>
+                </div>
+              </Col>
+              <Col span={8}>
+                <div style={{ padding: '12px', background: '#f9f9f9', borderRadius: 6 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>体重</Text>
+                  <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                    {currentHealthRecord.weight !== null && currentHealthRecord.weight !== undefined
+                      ? `${currentHealthRecord.weight} g`
+                      : '-'}
+                  </div>
+                </div>
+              </Col>
+              <Col span={8}>
+                <div style={{ padding: '12px', background: '#f9f9f9', borderRadius: 6 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>心率</Text>
+                  <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                    {currentHealthRecord.heartRate !== null && currentHealthRecord.heartRate !== undefined
+                      ? `${currentHealthRecord.heartRate} 次/分`
+                      : '-'}
+                  </div>
+                </div>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={8}>
+                <div style={{ padding: '12px', background: '#f9f9f9', borderRadius: 6 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>呼吸频率</Text>
+                  <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                    {currentHealthRecord.respiratoryRate !== null && currentHealthRecord.respiratoryRate !== undefined
+                      ? `${currentHealthRecord.respiratoryRate} 次/分`
+                      : '-'}
+                  </div>
+                </div>
+              </Col>
+              {currentHealthRecord.nextCheckDate && (
+                <Col span={8}>
+                  <div style={{ padding: '12px', background: '#f9f9f9', borderRadius: 6 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>下次检查</Text>
+                    <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>
+                      {dayjs(currentHealthRecord.nextCheckDate).format('MM-DD')}
+                    </div>
+                  </div>
+                </Col>
+              )}
+            </Row>
+
+            {currentHealthRecord.diagnosis && (
+              <>
+                <Divider style={{ margin: '16px 0' }} />
+                <Title level={5} style={{ marginBottom: 8 }}>诊断</Title>
+                <div style={{ padding: '10px 12px', background: '#fffbe6', borderRadius: 6, border: '1px solid #ffe58f' }}>
+                  <Text>{currentHealthRecord.diagnosis}</Text>
+                </div>
+              </>
+            )}
+
+            {currentHealthRecord.treatment && (
+              <>
+                <Divider style={{ margin: '16px 0' }} />
+                <Title level={5} style={{ marginBottom: 8 }}>治疗方案</Title>
+                <div style={{ padding: '10px 12px', background: '#e6f7ff', borderRadius: 6, border: '1px solid #91d5ff' }}>
+                  <Text>{currentHealthRecord.treatment}</Text>
+                </div>
+              </>
+            )}
+
+            {currentHealthRecord.notes && (
+              <>
+                <Divider style={{ margin: '16px 0' }} />
+                <Title level={5} style={{ marginBottom: 8 }}>备注</Title>
+                <Text type="secondary">{currentHealthRecord.notes}</Text>
+              </>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+
       {/* 批量排班 Modal */}
       <Modal
         title="批量排班"
@@ -1027,7 +1215,17 @@ const CheckupSchedules: React.FC = () => {
             </Form>
 
             <div style={{ marginTop: 24, textAlign: 'right' }}>
-              <Button type="primary" icon={<RightOutlined />} onClick={() => setBatchStep(1)}>
+              <Button
+                type="primary"
+                icon={<RightOutlined />}
+                onClick={() => {
+                  if (selectedAnimals.length === 0) {
+                    message.warning('请至少选择一只动物');
+                    return;
+                  }
+                  setBatchStep(1);
+                }}
+              >
                 下一步
               </Button>
             </div>
