@@ -254,6 +254,53 @@ const HealthComparison: React.FC = () => {
         );
       }
 
+      const annotations: any[] = [];
+      const firstDate = lineData[0].date;
+      const lastDate = lineData[lineData.length - 1].date;
+
+      if (range && range.min !== null && range.max !== null) {
+        annotations.push({
+          type: 'region',
+          start: [firstDate, range.max],
+          end: [lastDate, 'max'],
+          style: {
+            fill: '#ff4d4f',
+            fillOpacity: 0.15,
+          },
+        });
+        annotations.push({
+          type: 'region',
+          start: [firstDate, 'min'],
+          end: [lastDate, range.min],
+          style: {
+            fill: '#ff4d4f',
+            fillOpacity: 0.15,
+          },
+        });
+        annotations.push({
+          type: 'line',
+          start: [firstDate, range.max],
+          end: [lastDate, range.max],
+          style: {
+            stroke: '#ff4d4f',
+            lineWidth: 1,
+            lineDash: [4, 4],
+            opacity: 0.8,
+          },
+        });
+        annotations.push({
+          type: 'line',
+          start: [firstDate, range.min],
+          end: [lastDate, range.min],
+          style: {
+            stroke: '#ff4d4f',
+            lineWidth: 1,
+            lineDash: [4, 4],
+            opacity: 0.8,
+          },
+        });
+      }
+
       const config: any = {
         data: lineData,
         xField: 'date',
@@ -268,6 +315,7 @@ const HealthComparison: React.FC = () => {
         lineStyle: {
           lineWidth: 2,
         },
+        annotations,
         yAxis: {
           label: {
             formatter: (v: string) => `${v}${unit}`,
@@ -432,6 +480,7 @@ const HealthComparison: React.FC = () => {
         style: {
           fontSize: 11,
         },
+        formatter: (datum: any) => Number(datum.value).toFixed(1),
       },
       height: 360,
     };
@@ -441,20 +490,34 @@ const HealthComparison: React.FC = () => {
         title: '动物',
         dataIndex: 'animal',
         key: 'animal',
-        width: 140,
+        width: 150,
         render: (animal: any) => (
-          <Space>
-            <Text strong>{animal.name}</Text>
-            <Tag color="blue">{animal.species}</Tag>
+          <Space direction="vertical" size={2}>
+            <Space>
+              <Text strong>{animal.name}</Text>
+              <Tag color="blue">{animal.species}</Tag>
+            </Space>
           </Space>
         ),
       },
       {
-        title: '体检日期',
-        dataIndex: 'checkDate',
-        key: 'checkDate',
-        width: 120,
-        render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD') : '-'),
+        title: '时段范围',
+        dataIndex: 'startDate',
+        key: 'dateRange',
+        width: 200,
+        render: (_: any, record: any) => {
+          if (!record.startDate) return '-';
+          return (
+            <Space direction="vertical" size={0}>
+              <Text style={{ fontSize: 12 }}>
+                {record.startDate} ~ {record.endDate}
+              </Text>
+              <Tag color="purple" style={{ fontSize: 11, padding: '0 6px', margin: 0 }}>
+                共 {record.recordCount} 次体检 · 均值
+              </Tag>
+            </Space>
+          );
+        },
       },
       ...['temperature', 'weight', 'heartRate', 'respiratoryRate'].map((ind) => ({
         title: (
@@ -467,14 +530,14 @@ const HealthComparison: React.FC = () => {
         ),
         dataIndex: ind,
         key: ind,
-        width: 140,
+        width: 160,
         render: (val: number, record: any) => {
           if (val === null || val === undefined) return '-';
           const anomaly = record.anomalies?.[ind];
           return (
             <Space>
               <span style={{ color: anomaly?.isAbnormal ? '#ff4d4f' : undefined, fontWeight: anomaly?.isAbnormal ? 600 : undefined }}>
-                {val}
+                {Number(val).toFixed(1)}
               </span>
               {anomaly?.isAbnormal && renderAnomalyTag(anomaly.status)}
             </Space>
@@ -518,6 +581,7 @@ const HealthComparison: React.FC = () => {
                 <Space>
                   <BarChartOutlined style={{ color: '#1677ff' }} />
                   <span>多动物指标对比</span>
+                  <Tag color="purple">时段均值</Tag>
                 </Space>
               }
             >

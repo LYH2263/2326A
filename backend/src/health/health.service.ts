@@ -251,13 +251,13 @@ export class HealthService {
     }
 
     const comparisonData: any[] = [];
+    const indicators = ['temperature', 'weight', 'heartRate', 'respiratoryRate'];
 
     for (const animal of animals) {
       const qb = this.healthRecordRepository
         .createQueryBuilder('hr')
         .where('hr.animal_id = :animalId', { animalId: animal.id })
-        .orderBy('hr.check_date', 'DESC')
-        .limit(1);
+        .orderBy('hr.check_date', 'ASC');
 
       if (startDate) {
         qb.andWhere('hr.check_date >= :startDate', { startDate });
@@ -266,22 +266,32 @@ export class HealthService {
         qb.andWhere('hr.check_date <= :endDate', { endDate });
       }
 
-      const latestRecord = await qb.getOne();
+      const records = await qb.getMany();
 
-      if (latestRecord) {
+      if (records.length > 0) {
         const rangeMap = normalRangesBySpecies[animal.species];
 
-        const indicators = ['temperature', 'weight', 'heartRate', 'respiratoryRate'];
-        const anomalyInfo: Record<string, IndicatorAnomaly> = {};
-
+        const avgValues: Record<string, number | null> = {};
         indicators.forEach((ind) => {
-          const val = (latestRecord as any)[ind];
-          const range = rangeMap.get(ind);
-          anomalyInfo[ind] = this.checkAnomaly(
-            val !== null && val !== undefined ? Number(val) : null,
-            range,
-          );
+          const validVals = records
+            .map((r) => (r as any)[ind])
+            .filter((v) => v !== null && v !== undefined)
+            .map((v) => Number(v));
+          if (validVals.length > 0) {
+            avgValues[ind] = validVals.reduce((a, b) => a + b, 0) / validVals.length;
+          } else {
+            avgValues[ind] = null;
+          }
         });
+
+        const anomalyInfo: Record<string, IndicatorAnomaly> = {};
+        indicators.forEach((ind) => {
+          const range = rangeMap.get(ind);
+          anomalyInfo[ind] = this.checkAnomaly(avgValues[ind], range);
+        });
+
+        const firstRecord = records[0];
+        const lastRecord = records[records.length - 1];
 
         comparisonData.push({
           animal: {
@@ -289,26 +299,19 @@ export class HealthService {
             name: animal.name,
             species: animal.species,
           },
-          checkDate:
-            latestRecord.checkDate instanceof Date
-              ? latestRecord.checkDate.toISOString().split('T')[0]
-              : String(latestRecord.checkDate),
-          temperature:
-            latestRecord.temperature !== null && latestRecord.temperature !== undefined
-              ? Number(latestRecord.temperature)
-              : null,
-          weight:
-            latestRecord.weight !== null && latestRecord.weight !== undefined
-              ? Number(latestRecord.weight)
-              : null,
-          heartRate:
-            latestRecord.heartRate !== null && latestRecord.heartRate !== undefined
-              ? Number(latestRecord.heartRate)
-              : null,
-          respiratoryRate:
-            latestRecord.respiratoryRate !== null && latestRecord.respiratoryRate !== undefined
-              ? Number(latestRecord.respiratoryRate)
-              : null,
+          recordCount: records.length,
+          startDate:
+            firstRecord.checkDate instanceof Date
+              ? firstRecord.checkDate.toISOString().split('T')[0]
+              : String(firstRecord.checkDate),
+          endDate:
+            lastRecord.checkDate instanceof Date
+              ? lastRecord.checkDate.toISOString().split('T')[0]
+              : String(lastRecord.checkDate),
+          temperature: avgValues.temperature,
+          weight: avgValues.weight,
+          heartRate: avgValues.heartRate,
+          respiratoryRate: avgValues.respiratoryRate,
           anomalies: anomalyInfo,
         });
       } else {
@@ -318,7 +321,9 @@ export class HealthService {
             name: animal.name,
             species: animal.species,
           },
-          checkDate: null,
+          recordCount: 0,
+          startDate: null,
+          endDate: null,
           temperature: null,
           weight: null,
           heartRate: null,
@@ -337,7 +342,7 @@ export class HealthService {
     for (const species of speciesList) {
       const rangeMap = normalRangesBySpecies[species];
       allSpeciesRanges[species] = {};
-      ['temperature', 'weight', 'heartRate', 'respiratoryRate'].forEach((ind) => {
+      indicators.forEach((ind) => {
         const r = rangeMap.get(ind);
         allSpeciesRanges[species][ind] = {
           min: r ? r.min : null,
@@ -349,7 +354,8 @@ export class HealthService {
     return {
       animals: comparisonData,
       normalRanges: allSpeciesRanges,
-      indicators: ['temperature', 'weight', 'heartRate', 'respiratoryRate'],
+      indicators,
+      isAverage: true,
     };
   }
 }
