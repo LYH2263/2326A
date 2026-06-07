@@ -14,18 +14,17 @@ import {
 } from 'antd';
 import {
   BellOutlined,
-  WarningOutlined,
-  CheckCircleOutlined,
   ClockCircleOutlined,
   CoffeeOutlined,
   HeartOutlined,
-  ReadOutlined,
+  CheckOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { alertApi } from '../api';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 export type AlertType = 'health_abnormal' | 'next_check_overdue' | 'no_feeding_record';
@@ -87,7 +86,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ onAlertClick })
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<AlertType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<AlertStatus | 'all'>('all');
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const sseConnectedRef = useRef(false);
   const navigate = useNavigate();
 
   const fetchUnreadCount = useCallback(async () => {
@@ -114,42 +115,132 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ onAlertClick })
     }
   }, [filterType, filterStatus]);
 
-  useEffect(() => {
-    fetchUnreadCount();
-
+  const connectSSE = useCallback(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const es = new EventSource('/api/alerts/stream');
-        eventSourceRef.current = es;
+    if (!token) return;
 
-        es.addEventListener('new_alert', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            setUnreadCount((prev) => prev + 1);
-            setAlerts((prev) => [data, ...prev].slice(0, 50));
-            message.info(`新预警：${data.title}`);
-          } catch (e) {
-            // ignore
-          }
-        });
-
-        es.onerror = () => {
-          // silently fail, will retry via polling
-        };
-      } catch (e) {
-        // silently fail
-      }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
 
-    const interval = setInterval(fetchUnreadCount, 60000);
-    return () => {
-      clearInterval(interval);
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const connect = async () => {
+      try {
+        const response = await fetch('/api/alerts/stream', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`SSE connection failed: ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body');
+        }
+
+        sseConnectedRef.current = true;
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const parseEvent = (eventStr: string) => {
+          const lines = eventStr.trim().split('\n');
+          let eventType = 'message';
+          let data = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              data += line.slice(6);
+            }
+          }
+
+          return { eventType, data: data.trim() };
+        };
+
+        const processData = () => {
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+
+          for (const eventStr of events) {
+            if (!eventStr.trim()) continue;
+            const { eventType, data } = parseEvent(eventStr);
+
+            if (eventType === 'new_alert' && data) {
+              try {
+                const alert = JSON.parse(data);
+                setUnreadCount((prev) => prev + 1);
+                setAlerts((prev) => [alert, ...prev].slice(0, 50));
+                message.info(`新预警：${alert.title}`);
+              } catch (e) {
+                // ignore parse error
+              }
+            }
+          }
+        };
+
+        const read = async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              processData();
+            }
+          } catch (e: any) {
+            if (e.name !== 'AbortError') {
+              throw e;
+            }
+          }
+        };
+
+        await read();
+      } catch (error: any) {
+        if (error.name === 'AbortError') return;
+        sseConnectedRef.current = false;
+        // 重连
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
+        reconnectTimerRef.current = window.setTimeout(() => {
+          if (!controller.signal.aborted) {
+            connect();
+          }
+        }, 5000);
       }
     };
-  }, [fetchUnreadCount]);
+
+    connect();
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    connectSSE();
+
+    const interval = setInterval(() => {
+      fetchUnreadCount();
+      if (!sseConnectedRef.current) {
+        connectSSE();
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchUnreadCount, connectSSE]);
 
   useEffect(() => {
     if (open) {
@@ -165,7 +256,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ onAlertClick })
     setOpen(false);
   };
 
-  const handleMarkAsRead = async (id: number) => {
+  const handleMarkAsRead = async (id: number, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     try {
       await alertApi.markAsRead(id);
       setAlerts((prev) =>
@@ -197,7 +291,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ onAlertClick })
     if (alert.status === 'unread') {
       handleMarkAsRead(alert.id);
     }
-    navigate(`/animals?animalId=${alert.animalId}`);
+    navigate(`/animals?animalId=${alert.animalId}&t=${Date.now()}`);
     setOpen(false);
   };
 
@@ -221,6 +315,31 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ onAlertClick })
         (e.currentTarget as HTMLElement).style.background =
           item.status === 'unread' ? '#fffbe6' : 'transparent';
       }}
+      actions={[
+        item.status === 'unread' ? (
+          <Tooltip key="read" title="标记已读">
+            <Button
+              type="text"
+              size="small"
+              icon={<CheckOutlined />}
+              onClick={(e) => handleMarkAsRead(item.id, e)}
+              style={{ color: '#52c41a' }}
+            />
+          </Tooltip>
+        ) : (
+          <Tooltip key="view" title="查看详情">
+            <Button
+              type="text"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGoToAnimal(item);
+              }}
+            />
+          </Tooltip>
+        ),
+      ]}
     >
       <List.Item.Meta
         avatar={

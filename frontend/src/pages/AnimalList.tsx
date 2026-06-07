@@ -676,7 +676,7 @@ const AnimalList: React.FC = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const hasOpenedDetailRef = useRef(false);
+  const lastOpenedAnimalIdRef = useRef<number | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -718,12 +718,16 @@ const AnimalList: React.FC = () => {
 
   useEffect(() => {
     const animalId = searchParams.get('animalId');
-    if (animalId && !hasOpenedDetailRef.current) {
-      hasOpenedDetailRef.current = true;
+    if (animalId) {
       const id = parseInt(animalId, 10);
       if (!isNaN(id)) {
-        handleDetail(id);
+        if (lastOpenedAnimalIdRef.current !== id || !detailVisible) {
+          lastOpenedAnimalIdRef.current = id;
+          handleDetail(id);
+        }
       }
+    } else {
+      lastOpenedAnimalIdRef.current = null;
     }
   }, [searchParams]);
 
