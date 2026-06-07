@@ -63,7 +63,13 @@ export class AnimalsController {
     @Query('status') status?: string,
     @Query('keyword') keyword?: string,
   ) {
-    return this.animalsService.findAll({ page, pageSize, species, status, keyword });
+    return this.animalsService.findAll({
+      page: page ? +page : undefined,
+      pageSize: pageSize ? +pageSize : undefined,
+      species,
+      status,
+      keyword,
+    });
   }
 
   @Get('species')

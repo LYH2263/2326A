@@ -626,18 +626,18 @@ export class AnimalsService {
     }
 
     if (animalId) {
-      qb.andWhere('(record.male_id = :animalId OR record.female_id = :animalId)', { animalId });
+      qb.andWhere('(record.maleId = :animalId OR record.femaleId = :animalId)', { animalId });
     }
 
     if (startDate) {
-      qb.andWhere('record.pairing_date >= :startDate', { startDate });
+      qb.andWhere('record.pairingDate >= :startDate', { startDate });
     }
 
     if (endDate) {
-      qb.andWhere('record.pairing_date <= :endDate', { endDate });
+      qb.andWhere('record.pairingDate <= :endDate', { endDate });
     }
 
-    qb.orderBy('record.pairing_date', 'DESC');
+    qb.orderBy('record.pairingDate', 'DESC');
 
     const [list, total] = await qb
       .skip((page - 1) * pageSize)

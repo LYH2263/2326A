@@ -254,29 +254,7 @@ const HealthComparison: React.FC = () => {
         );
       }
 
-      const annotations: any[] = [];
-      if (range && range.min !== null && range.max !== null) {
-        annotations.push({
-          type: 'region',
-          start: ['min', range.max],
-          end: ['max', 'max'],
-          style: {
-            fill: '#ff4d4f',
-            fillOpacity: 0.1,
-          },
-        });
-        annotations.push({
-          type: 'region',
-          start: ['min', 'min'],
-          end: ['max', range.min],
-          style: {
-            fill: '#ff4d4f',
-            fillOpacity: 0.1,
-          },
-        });
-      }
-
-      const config = {
+      const config: any = {
         data: lineData,
         xField: 'date',
         yField: 'value',
@@ -290,7 +268,6 @@ const HealthComparison: React.FC = () => {
         lineStyle: {
           lineWidth: 2,
         },
-        annotations,
         yAxis: {
           label: {
             formatter: (v: string) => `${v}${unit}`,
