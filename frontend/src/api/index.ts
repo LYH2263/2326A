@@ -182,6 +182,8 @@ export const feedingPlanApi = {
   getFeeders: () => api.get('/feeding-plans/feeders/list'),
   getFoodTypes: () => api.get('/feeding-plans/food-types/list'),
   getDailyStats: (date: string) => api.get('/feeding-plans/daily-stats', { params: { date } }),
+  getDailyStatsByDateRange: (startDate: string, endDate: string, params?: any) =>
+    api.get('/feeding-plans/daily-stats/range', { params: { startDate, endDate, ...params } }),
 };
 
 // ========== 统计 API ==========

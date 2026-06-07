@@ -426,4 +426,78 @@ export class FeedingPlansService {
 
     return stats;
   }
+
+  async getDailyStatsByDateRange(
+    startDate: string,
+    endDate: string,
+    filters?: {
+      feeder?: string;
+      animalId?: number;
+    },
+  ): Promise<Array<{
+    date: string;
+    total: number;
+    pending: number;
+    completed: number;
+    missed: number;
+    cancelled: number;
+    completionRate: number;
+  }>> {
+    const start = dayjs(startDate);
+    const end = dayjs(endDate);
+    const days: string[] = [];
+
+    let current = start;
+    while (current.isBefore(end) || current.isSame(end, 'day')) {
+      days.push(current.format('YYYY-MM-DD'));
+      current = current.add(1, 'day');
+    }
+
+    const where: any = {
+      taskDate: Between(startDate, endDate) as any,
+    };
+
+    if (filters?.feeder) {
+      where.feeder = filters.feeder;
+    }
+    if (filters?.animalId) {
+      where.animalId = filters.animalId;
+    }
+
+    const tasks = await this.taskRepository.find({ where });
+
+    const statsMap: Record<string, {
+      total: number;
+      pending: number;
+      completed: number;
+      missed: number;
+      cancelled: number;
+    }> = {};
+
+    for (const d of days) {
+      statsMap[d] = { total: 0, pending: 0, completed: 0, missed: 0, cancelled: 0 };
+    }
+
+    for (const task of tasks) {
+      const dateStr = dayjs(task.taskDate).format('YYYY-MM-DD');
+      if (statsMap[dateStr]) {
+        statsMap[dateStr].total++;
+        if (task.status in statsMap[dateStr]) {
+          (statsMap[dateStr] as any)[task.status]++;
+        }
+      }
+    }
+
+    const result = days.map((date) => {
+      const s = statsMap[date];
+      const completionRate = s.total > 0 ? Number(((s.completed / s.total) * 100).toFixed(1)) : 0;
+      return {
+        date,
+        ...s,
+        completionRate,
+      };
+    });
+
+    return result;
+  }
 }

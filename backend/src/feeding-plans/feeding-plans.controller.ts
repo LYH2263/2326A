@@ -158,4 +158,17 @@ export class FeedingPlansController {
   getDailyStats(@Query('date') date: string) {
     return this.feedingPlansService.getDailyStats(date);
   }
+
+  @Get('daily-stats/range')
+  @ApiOperation({ summary: '按日期范围获取每日任务统计' })
+  @ApiQuery({ name: 'startDate', required: true })
+  @ApiQuery({ name: 'endDate', required: true })
+  @ApiQuery({ name: 'feeder', required: false })
+  getDailyStatsByDateRange(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('feeder') feeder?: string,
+  ) {
+    return this.feedingPlansService.getDailyStatsByDateRange(startDate, endDate, { feeder });
+  }
 }
