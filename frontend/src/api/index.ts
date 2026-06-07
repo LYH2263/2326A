@@ -73,6 +73,13 @@ export const animalApi = {
     api.get(`/animals/${id}/descendants/tree`, { params: { generations } }),
   getFullPedigree: (id: number, generations?: number) =>
     api.get(`/animals/${id}/pedigree`, { params: { generations } }),
+  createStatusChangeRequest: (data: { animalId: number; toStatus: string; reason: string }) =>
+    api.post('/animals/status-change-requests', data),
+  getStatusChangeRequests: (params?: any) => api.get('/animals/status-change-requests', { params }),
+  getStatusChangeRequest: (id: number) => api.get(`/animals/status-change-requests/${id}`),
+  approveStatusChangeRequest: (id: number, data: { status: string; comment?: string }) =>
+    api.patch(`/animals/status-change-requests/${id}/approve`, data),
+  getAnimalStatusChangeRequests: (id: number) => api.get(`/animals/${id}/status-change-requests`),
 };
 
 // ========== 健康记录 API ==========

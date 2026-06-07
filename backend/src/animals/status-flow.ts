@@ -2,6 +2,7 @@ export interface StatusFlowEdge {
   from: string;
   to: string;
   label?: string;
+  requiresApproval?: boolean;
 }
 
 export const ANIMAL_STATUSES = [
@@ -31,17 +32,17 @@ export const STATUS_COLORS: Record<AnimalStatus, string> = {
 };
 
 export const STATUS_FLOW_EDGES: StatusFlowEdge[] = [
-  { from: 'quarantine', to: 'healthy', label: '检疫通过' },
-  { from: 'quarantine', to: 'sick', label: '检疫发现患病' },
-  { from: 'healthy', to: 'sick', label: '生病' },
-  { from: 'healthy', to: 'in_experiment', label: '进入实验' },
-  { from: 'healthy', to: 'quarantine', label: '需隔离观察' },
-  { from: 'healthy', to: 'deceased', label: '意外死亡' },
-  { from: 'sick', to: 'healthy', label: '康复' },
-  { from: 'sick', to: 'deceased', label: '病死' },
-  { from: 'in_experiment', to: 'healthy', label: '实验结束' },
-  { from: 'in_experiment', to: 'sick', label: '实验中生病' },
-  { from: 'in_experiment', to: 'deceased', label: '实验中死亡' },
+  { from: 'quarantine', to: 'healthy', label: '检疫通过', requiresApproval: false },
+  { from: 'quarantine', to: 'sick', label: '检疫发现患病', requiresApproval: false },
+  { from: 'healthy', to: 'sick', label: '生病', requiresApproval: false },
+  { from: 'healthy', to: 'in_experiment', label: '进入实验', requiresApproval: true },
+  { from: 'healthy', to: 'quarantine', label: '需隔离观察', requiresApproval: false },
+  { from: 'healthy', to: 'deceased', label: '意外死亡', requiresApproval: true },
+  { from: 'sick', to: 'healthy', label: '康复', requiresApproval: false },
+  { from: 'sick', to: 'deceased', label: '病死', requiresApproval: true },
+  { from: 'in_experiment', to: 'healthy', label: '实验结束', requiresApproval: true },
+  { from: 'in_experiment', to: 'sick', label: '实验中生病', requiresApproval: false },
+  { from: 'in_experiment', to: 'deceased', label: '实验中死亡', requiresApproval: true },
 ];
 
 export function getAllowedNextStatuses(currentStatus: string): string[] {
@@ -55,6 +56,14 @@ export function isStatusTransitionAllowed(fromStatus: string, toStatus: string):
   return STATUS_FLOW_EDGES.some(
     (edge) => edge.from === fromStatus && edge.to === toStatus,
   );
+}
+
+export function doesTransitionRequireApproval(fromStatus: string, toStatus: string): boolean {
+  if (fromStatus === toStatus) return false;
+  const edge = STATUS_FLOW_EDGES.find(
+    (e) => e.from === fromStatus && e.to === toStatus,
+  );
+  return edge?.requiresApproval ?? false;
 }
 
 export function getStatusFlowEdges(): StatusFlowEdge[] {

@@ -663,6 +663,11 @@ const AnimalList: React.FC = () => {
   const [changeReason, setChangeReason] = useState('');
   const [statusChanged, setStatusChanged] = useState(false);
 
+  const [statusChangeModalVisible, setStatusChangeModalVisible] = useState(false);
+  const [statusChangeTarget, setStatusChangeTarget] = useState('');
+  const [statusChangeReason, setStatusChangeReason] = useState('');
+  const [statusChangeLoading, setStatusChangeLoading] = useState(false);
+
   const [pedigreeData, setPedigreeData] = useState<any>(null);
   const [pedigreeLoading, setPedigreeLoading] = useState(false);
   const [pedigreeGenerations, setPedigreeGenerations] = useState(3);
@@ -820,6 +825,63 @@ const AnimalList: React.FC = () => {
       fetchCageList();
     } catch {
       // handled
+    }
+  };
+
+  const isTransitionRequiresApproval = (fromStatus: string, toStatus: string): boolean => {
+    const edge = statusFlowRules.find((e: any) => e.from === fromStatus && e.to === toStatus);
+    return edge?.requiresApproval ?? false;
+  };
+
+  const handleOpenStatusChange = () => {
+    if (!detailAnimal) return;
+    setStatusChangeTarget('');
+    setStatusChangeReason('');
+    setStatusChangeModalVisible(true);
+  };
+
+  const handleStatusChangeSubmit = async () => {
+    if (!detailAnimal) return;
+    if (!statusChangeTarget) {
+      message.warning('请选择目标状态');
+      return;
+    }
+    if (!statusChangeReason.trim()) {
+      message.warning('请填写变更原因');
+      return;
+    }
+
+    const requiresApproval = isTransitionRequiresApproval(detailAnimal.status, statusChangeTarget);
+
+    try {
+      setStatusChangeLoading(true);
+
+      if (requiresApproval) {
+        await animalApi.createStatusChangeRequest({
+          animalId: detailAnimal.id,
+          toStatus: statusChangeTarget,
+          reason: statusChangeReason,
+        });
+        message.success('状态变更申请已提交，请等待管理员审批');
+      } else {
+        await animalApi.update(detailAnimal.id, {
+          status: statusChangeTarget,
+          statusChangeReason: statusChangeReason,
+        });
+        message.success('状态变更成功');
+      }
+
+      setStatusChangeModalVisible(false);
+      fetchData();
+      if (detailAnimal) {
+        const res: any = await animalApi.getDetail(detailAnimal.id);
+        setDetailAnimal(res);
+        fetchStatusChangeLogs(detailAnimal.id);
+      }
+    } catch (err: any) {
+      // error handled by interceptor
+    } finally {
+      setStatusChangeLoading(false);
     }
   };
 
@@ -1599,17 +1661,27 @@ const AnimalList: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>动物详细信息</span>
             {detailAnimal && (
-              <Button
-                size="small"
-                type="primary"
-                icon={<FileTextOutlined />}
-                onClick={() => {
-                  handleDetailClose();
-                  navigate(`/animals/${detailAnimal.id}/archive`);
-                }}
-              >
-                查看完整档案
-              </Button>
+              <Space size="small">
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<SwapOutlined />}
+                  onClick={handleOpenStatusChange}
+                >
+                  变更状态
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<FileTextOutlined />}
+                  onClick={() => {
+                    handleDetailClose();
+                    navigate(`/animals/${detailAnimal.id}/archive`);
+                  }}
+                >
+                  查看完整档案
+                </Button>
+              </Space>
             )}
           </div>
         }
@@ -1624,6 +1696,87 @@ const AnimalList: React.FC = () => {
           onChange={setDetailTabKey}
           items={detailTabs}
         />
+      </Modal>
+
+      <Modal
+        title="变更状态"
+        open={statusChangeModalVisible}
+        onOk={handleStatusChangeSubmit}
+        onCancel={() => setStatusChangeModalVisible(false)}
+        width={480}
+        okText="确认"
+        cancelText="取消"
+        confirmLoading={statusChangeLoading}
+        destroyOnClose
+      >
+        {detailAnimal && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>当前状态</div>
+              <Tag color={statusOptions.find((o: any) => o.value === detailAnimal.status)?.color}>
+                {statusOptions.find((o: any) => o.value === detailAnimal.status)?.label || detailAnimal.status}
+              </Tag>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>
+                目标状态 <span style={{ color: '#ff4d4f' }}>*</span>
+              </div>
+              <Select
+                value={statusChangeTarget || undefined}
+                onChange={setStatusChangeTarget}
+                style={{ width: '100%' }}
+                placeholder="请选择目标状态"
+              >
+                {(() => {
+                  const allowed = getAllowedNextStatuses(detailAnimal.status);
+                  return allowed
+                    .filter((s: string) => s !== detailAnimal.status)
+                    .map((status: string) => {
+                      const opt = statusOptions.find((o: any) => o.value === status);
+                      const requiresApproval = isTransitionRequiresApproval(detailAnimal.status, status);
+                      return (
+                        <Option key={status} value={status}>
+                          <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>
+                              <Tag color={opt?.color} style={{ marginRight: 8 }}>{opt?.label || status}</Tag>
+                            </span>
+                            {requiresApproval && (
+                              <Tag color="orange" style={{ marginLeft: 8 }}>需审批</Tag>
+                            )}
+                          </span>
+                        </Option>
+                      );
+                    });
+                })()}
+              </Select>
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>
+                变更原因 <span style={{ color: '#ff4d4f' }}>*</span>
+              </div>
+              <TextArea
+                rows={4}
+                value={statusChangeReason}
+                onChange={(e) => setStatusChangeReason(e.target.value)}
+                placeholder="请输入变更原因"
+                maxLength={500}
+                showCount
+              />
+            </div>
+
+            {statusChangeTarget && isTransitionRequiresApproval(detailAnimal.status, statusChangeTarget) && (
+              <Alert
+                style={{ marginTop: 16 }}
+                type="warning"
+                showIcon
+                message="该状态变更需要审批"
+                description="提交后将由管理员进行审批，审批通过后状态自动更新。"
+              />
+            )}
+          </div>
+        )}
       </Modal>
 
       <Modal

@@ -14,6 +14,7 @@ import Statistics from './pages/Statistics';
 import CheckupSchedules from './pages/CheckupSchedules';
 import BreedingRecords from './pages/BreedingRecords';
 import AnimalArchive from './pages/AnimalArchive';
+import StatusChangeApproval from './pages/StatusChangeApproval';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -87,6 +88,7 @@ const App: React.FC = () => {
             <Route path="checkup-schedules" element={<CheckupSchedules />} />
             <Route path="breeding-records" element={<BreedingRecords />} />
             <Route path="animals/:id/archive" element={<AnimalArchive />} />
+            <Route path="status-approval" element={<StatusChangeApproval />} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
         </Routes>

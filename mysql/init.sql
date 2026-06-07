@@ -261,6 +261,28 @@ CREATE TABLE IF NOT EXISTS `status_change_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='状态变更日志表';
 
 -- ========================================
+-- 状态变更申请表
+-- ========================================
+CREATE TABLE IF NOT EXISTS `status_change_requests` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `applicant` VARCHAR(100) NOT NULL COMMENT '申请人',
+  `animal_id` INT NOT NULL COMMENT '动物ID',
+  `from_status` VARCHAR(50) NOT NULL COMMENT '原状态',
+  `to_status` VARCHAR(50) NOT NULL COMMENT '目标状态',
+  `reason` TEXT NOT NULL COMMENT '变更原因',
+  `approver` VARCHAR(100) DEFAULT NULL COMMENT '审批人',
+  `approval_status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' COMMENT '审批状态',
+  `approval_comment` TEXT COMMENT '审批意见',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `approved_at` DATETIME DEFAULT NULL COMMENT '审批时间',
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  INDEX `idx_animal_id` (`animal_id`),
+  INDEX `idx_approval_status` (`approval_status`),
+  INDEX `idx_applicant` (`applicant`),
+  INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='状态变更申请表';
+
+-- ========================================
 -- 笼位转移日志表
 -- ========================================
 CREATE TABLE IF NOT EXISTS `cage_transfer_logs` (

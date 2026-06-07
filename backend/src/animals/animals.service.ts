@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
 import { Animal } from './entities/animal.entity';
 import { CageTransferLog } from './entities/cage-transfer-log.entity';
 import { StatusChangeLog } from './entities/status-change-log.entity';
+import { StatusChangeRequest } from './entities/status-change-request.entity';
 import { BreedingRecord } from './entities/breeding-record.entity';
 import { CreateAnimalDto } from './dto/create-animal.dto';
 import { UpdateAnimalDto } from './dto/update-animal.dto';
@@ -11,10 +12,12 @@ import { CageSplitDto, CageMergeDto, CageTransferLogQueryDto } from './dto/cage-
 import { SetParentsDto } from './dto/set-parents.dto';
 import { CreateBreedingRecordDto } from './dto/create-breeding-record.dto';
 import { UpdateBreedingRecordDto } from './dto/update-breeding-record.dto';
+import { CreateStatusChangeRequestDto, ApproveStatusChangeRequestDto } from './dto/status-change-request.dto';
 import {
   isStatusTransitionAllowed,
   getAllowedNextStatuses,
   getStatusFlowEdges,
+  doesTransitionRequireApproval,
   STATUS_LABELS,
   StatusFlowEdge,
 } from './status-flow';
@@ -30,6 +33,8 @@ export class AnimalsService {
     private readonly cageTransferLogRepository: Repository<CageTransferLog>,
     @InjectRepository(StatusChangeLog)
     private readonly statusChangeLogRepository: Repository<StatusChangeLog>,
+    @InjectRepository(StatusChangeRequest)
+    private readonly statusChangeRequestRepository: Repository<StatusChangeRequest>,
     @InjectRepository(BreedingRecord)
     private readonly breedingRecordRepository: Repository<BreedingRecord>,
   ) {}
@@ -91,6 +96,12 @@ export class AnimalsService {
         const allowedLabels = allowed.map((s) => STATUS_LABELS[s] || s).join('、');
         throw new BadRequestException(
           `状态转换不合法：${STATUS_LABELS[oldStatus] || oldStatus} 不能转换为 ${STATUS_LABELS[newStatus] || newStatus}。合法的目标状态：${allowedLabels || '无'}`,
+        );
+      }
+
+      if (doesTransitionRequireApproval(oldStatus, newStatus)) {
+        throw new BadRequestException(
+          `该状态变更（${STATUS_LABELS[oldStatus] || oldStatus} → ${STATUS_LABELS[newStatus] || newStatus}）需要审批，请通过状态变更申请流程提交。`,
         );
       }
 
@@ -645,6 +656,151 @@ export class AnimalsService {
       where: [{ maleId: animalId }, { femaleId: animalId }],
       relations: ['male', 'female'],
       order: { pairingDate: 'DESC' },
+    });
+  }
+
+  async createStatusChangeRequest(
+    dto: CreateStatusChangeRequestDto,
+    applicant: string,
+  ): Promise<StatusChangeRequest> {
+    const animal = await this.findOne(dto.animalId);
+    const oldStatus = animal.status;
+    const newStatus = dto.toStatus;
+
+    if (!isStatusTransitionAllowed(oldStatus, newStatus)) {
+      const allowed = getAllowedNextStatuses(oldStatus);
+      const allowedLabels = allowed.map((s) => STATUS_LABELS[s] || s).join('、');
+      throw new BadRequestException(
+        `状态转换不合法：${STATUS_LABELS[oldStatus] || oldStatus} 不能转换为 ${STATUS_LABELS[newStatus] || newStatus}。合法的目标状态：${allowedLabels || '无'}`,
+      );
+    }
+
+    if (!doesTransitionRequireApproval(oldStatus, newStatus)) {
+      throw new BadRequestException(
+        `该状态变更（${STATUS_LABELS[oldStatus] || oldStatus} → ${STATUS_LABELS[newStatus] || newStatus}）无需审批，请直接修改状态。`,
+      );
+    }
+
+    const pendingCount = await this.statusChangeRequestRepository.count({
+      where: {
+        animalId: dto.animalId,
+        approvalStatus: 'pending',
+      },
+    });
+
+    if (pendingCount > 0) {
+      throw new BadRequestException('该动物已有待审批的状态变更申请，请先处理。');
+    }
+
+    const request = this.statusChangeRequestRepository.create({
+      ...dto,
+      fromStatus: oldStatus,
+      applicant,
+      approvalStatus: 'pending',
+    });
+
+    const saved = await this.statusChangeRequestRepository.save(request);
+    this.logger.log(
+      `Status change request created: #${saved.id} for animal #${dto.animalId} by ${applicant} (${oldStatus} -> ${newStatus})`,
+    );
+    return saved;
+  }
+
+  async getStatusChangeRequests(query: {
+    page?: number;
+    pageSize?: number;
+    approvalStatus?: string;
+    animalId?: number;
+    applicant?: string;
+  }): Promise<{ list: StatusChangeRequest[]; total: number }> {
+    const { page = 1, pageSize = 10, approvalStatus, animalId, applicant } = query;
+    const where: any = {};
+
+    if (approvalStatus) where.approvalStatus = approvalStatus;
+    if (animalId) where.animalId = animalId;
+    if (applicant) where.applicant = applicant;
+
+    const [list, total] = await this.statusChangeRequestRepository.findAndCount({
+      where,
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      relations: ['animal'],
+    });
+
+    return { list, total };
+  }
+
+  async getStatusChangeRequest(id: number): Promise<StatusChangeRequest> {
+    const request = await this.statusChangeRequestRepository.findOne({
+      where: { id },
+      relations: ['animal'],
+    });
+    if (!request) {
+      throw new NotFoundException(`状态变更申请 #${id} 不存在`);
+    }
+    return request;
+  }
+
+  async approveStatusChangeRequest(
+    id: number,
+    dto: ApproveStatusChangeRequestDto,
+    approver: string,
+    userRole: string,
+  ): Promise<StatusChangeRequest> {
+    if (userRole !== 'admin') {
+      throw new ForbiddenException('只有管理员可以审批状态变更申请');
+    }
+
+    const request = await this.getStatusChangeRequest(id);
+
+    if (request.approvalStatus !== 'pending') {
+      throw new BadRequestException('该申请已被处理，无法重复审批');
+    }
+
+    request.approvalStatus = dto.status;
+    request.approver = approver;
+    request.approvalComment = dto.comment || null;
+    request.approvedAt = new Date();
+
+    const saved = await this.statusChangeRequestRepository.save(request);
+
+    if (dto.status === 'approved') {
+      try {
+        const animal = await this.findOne(request.animalId);
+        if (animal.status === request.fromStatus) {
+          animal.status = request.toStatus;
+          await this.animalRepository.save(animal);
+
+          const log = this.statusChangeLogRepository.create({
+            animalId: request.animalId,
+            fromStatus: request.fromStatus,
+            toStatus: request.toStatus,
+            reason: request.reason,
+            operator: approver,
+          });
+          await this.statusChangeLogRepository.save(log);
+
+          this.logger.log(
+            `Status change request #${id} approved, animal #${request.animalId} status updated: ${request.fromStatus} -> ${request.toStatus}`,
+          );
+        }
+      } catch (err) {
+        this.logger.error(`Failed to update animal status after approval: ${err}`);
+      }
+    } else {
+      this.logger.log(
+        `Status change request #${id} rejected by ${approver}`,
+      );
+    }
+
+    return saved;
+  }
+
+  async getStatusChangeRequestsByAnimal(animalId: number): Promise<StatusChangeRequest[]> {
+    return this.statusChangeRequestRepository.find({
+      where: { animalId },
+      order: { createdAt: 'DESC' },
     });
   }
 }

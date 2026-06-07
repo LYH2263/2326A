@@ -17,6 +17,7 @@ import {
   CalendarOutlined,
   SmileOutlined,
   ScheduleOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import NotificationCenter from './NotificationCenter';
 
@@ -33,6 +34,7 @@ const menuItems = [
   { key: '/feeding', icon: <CoffeeOutlined />, label: '饲养记录' },
   { key: '/feeding-plans', icon: <ScheduleOutlined />, label: '饲养计划' },
   { key: '/breeding-records', icon: <SmileOutlined />, label: '繁殖记录' },
+  { key: '/status-approval', icon: <CheckCircleOutlined />, label: '审批中心' },
   { key: '/statistics', icon: <BarChartOutlined />, label: '数据统计' },
 ];
 
